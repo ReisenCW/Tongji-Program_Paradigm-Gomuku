@@ -86,7 +86,7 @@ Chess field; // 己方颜色
 Chess opponent; // 对方颜色
 Chess board[board_size][board_size] = { None }; // 棋盘
 LL all_score[2]; // 总分数,all_score[0]为己方分数,all_score[1]为对方分数
-// 每个点的分数,point_score[0]为己方分数,point_score[1]为对方分数,point_score[0]的[0],[1],[2],[3]分别存储横,竖,左上-右下,右上-左下的直线分数
+// point_score[0]为己方分数,point_score[1]为对方分数,point_score[0]的[0],[1],[2],[3]分别存储横,竖,左上-右下,右上-左下的直线分数
 LL point_score[2][4][board_size * 2];//[chess][direction][index],对于竖和横,会空出来board_size个位置
 Move bestMove = { {-1, -1} , MIN_SCORE};
 
@@ -181,16 +181,19 @@ set<Point, PointComparator> GetPossibleMoves(Chess color) {
 	}
 
 	// 扩展5格的范围
-	minX = max(0, minX - 5);
-	maxX = min(board_size - 1, maxX + 5);
-	minY = max(0, minY - 5);
-	maxY = min(board_size - 1, maxY + 5);
+	minX = max(0, minX - 2);
+	maxX = min(board_size - 1, maxX + 2);
+	minY = max(0, minY - 2);
+	maxY = min(board_size - 1, maxY + 2);
 
 	// 在扩展后的范围内寻找可能的落子位置
 	for (int i = minX; i <= maxX; i++) {
 		for (int j = minY; j <= maxY; j++) {
-			if (board[i][j] == None && EvaluatePosition(color, i, j) > 0) {
-				moves.insert({ i, j });
+			if (board[i][j] == None) {
+				int index = color == field ? 0 : 1;
+				if (point_score[index][0][i] >= LIVE_TWO || point_score[index][1][j] >= LIVE_TWO || point_score[index][2][i - j + board_size] >= LIVE_TWO || point_score[index][3][i + j] >= LIVE_TWO) {
+					moves.insert({ i, j });
+				}
 			}
 		}
 	}
@@ -267,22 +270,22 @@ LL EvaluatePosition(Chess color, int x, int y) {
 	//横向
 	for (int i = max(0, x - 5); i < min(board_size, x + 6); i++) {
 		myPattern[0] += (board[i][y] == field) ? '1' : (board[i][y] == None ? '0' : '2');
-		oppoPattern[0] += (board[i][y] == opponent) ? '2' : (board[i][y] == None ? '0' : '1');
+		oppoPattern[0] += (board[i][y] == opponent) ? '1' : (board[i][y] == None ? '0' : '2');
 	}
 	//纵向
 	for (int i = max(0, y - 5); i < min(board_size, y + 6); i++) {
 		myPattern[1] += (board[x][i] == field) ? '1' : (board[x][i] == None ? '0' : '2');
-		oppoPattern[1] += (board[x][i] == opponent) ? '2' : (board[x][i] == None ? '0' : '1');
+		oppoPattern[1] += (board[x][i] == opponent) ? '1' : (board[x][i] == None ? '0' : '2');
 	}
 	//左上-右下
 	for (int i = max(0, x - min(5, min(x , y))), j = max(0, y - min(5, min(x, y))); i < min(board_size, x + 6) && j < min(board_size, y + 6); i++, j++) {
 		myPattern[2] += (board[i][j] == field) ? '1' : (board[i][j] == None ? '0' : '2');
-		oppoPattern[2] += (board[i][j] == opponent) ? '2' : (board[i][j] == None ? '0' : '1');
+		oppoPattern[2] += (board[i][j] == opponent) ? '1' : (board[i][j] == None ? '0' : '2');
 	}
 	//右上-左下
 	for (int i = max(0, x + min(5, min(y, board_size - 1 - x))), j = max(0, y - min(5, min(y, board_size - 1 - x))); i >= 0 && j < min(board_size, y + 6); i--, j++) {
 		myPattern[3] += (board[i][j] == field) ? '1' : (board[i][j] == None ? '0' : '2');
-		oppoPattern[3] += (board[i][j] == opponent) ? '2' : (board[i][j] == None ? '0' : '1');
+		oppoPattern[3] += (board[i][j] == opponent) ? '1' : (board[i][j] == None ? '0' : '2');
 	}
 
 	LL myScore[4] = { 0 };
@@ -312,22 +315,22 @@ void UpdateScore(int x, int y) {
 	//横向
 	for (int i = 0; i < board_size; i++) {
 		myPattern[0] += (board[x][i] == field) ? '1' : (board[x][i] == None ? '0' : '2');
-		oppoPattern[0] += (board[x][i] == opponent) ? '2' : (board[x][i] == None ? '0' : '1');
+		oppoPattern[0] += (board[x][i] == opponent) ? '1' : (board[x][i] == None ? '0' : '2');
 	}
 	//纵向
 	for (int i = 0; i < board_size; i++) {
 		myPattern[1] += (board[i][y] == field) ? '1' : (board[i][y] == None ? '0' : '2');
-		oppoPattern[1] += (board[i][y] == opponent) ? '2' : (board[i][y] == None ? '0' : '1');
+		oppoPattern[1] += (board[i][y] == opponent) ? '1' : (board[i][y] == None ? '0' : '2');
 	}
 	//左上-右下
 	for (int i = x - min(x, y), j = y - min(x, y); i < board_size && j < board_size; i++, j++) {
 		myPattern[2] += (board[i][j] == field) ? '1' : (board[i][j] == None ? '0' : '2');
-		oppoPattern[2] += (board[i][j] == opponent) ? '2' : (board[i][j] == None ? '0' : '1');
+		oppoPattern[2] += (board[i][j] == opponent) ? '1' : (board[i][j] == None ? '0' : '2');
 	}
 	//右上-左下
 	for (int i = x + min(board_size - 1 - x, y), j = y - min(board_size - 1 - x, y); i >= 0 && j < board_size; i--, j++) {
 		myPattern[3] += (board[i][j] == field) ? '1' : (board[i][j] == None ? '0' : '2');
-		oppoPattern[3] += (board[i][j] == opponent) ? '2' : (board[i][j] == None ? '0' : '1');
+		oppoPattern[3] += (board[i][j] == opponent) ? '1' : (board[i][j] == None ? '0' : '2');
 	}
 
 	LL myScore[4] = { 0 };
@@ -345,27 +348,33 @@ void UpdateScore(int x, int y) {
 	//更新分数
 	//先减去原来的分数
 	for (int i = 0; i < 2; i++) {
-		all_score[i] -= point_score[0][0][x];
-		all_score[i] -= point_score[0][1][y];
-		all_score[i] -= point_score[0][2][x - y + board_size];
-		all_score[i] -= point_score[0][3][x + y];
+		all_score[i] -= point_score[i][0][x];
+		all_score[i] -= point_score[i][1][y];
+		all_score[i] -= point_score[i][2][x - y + board_size];
+		all_score[i] -= point_score[i][3][x + y];
 	}
 	//更新point_score
 	point_score[0][0][x] = myScore[0];
 	point_score[0][1][y] = myScore[1];
 	point_score[0][2][x - y + board_size] = myScore[2];
 	point_score[0][3][x + y] = myScore[3];
+	point_score[1][0][x] = oppoScore[0];
+	point_score[1][1][y] = oppoScore[1];
+	point_score[1][2][x - y + board_size] = oppoScore[2];
+	point_score[1][3][x + y] = oppoScore[3];
 
 	//再加上新的分数
 	for (int i = 0; i < 2; i++) {
-		all_score[i] += point_score[0][0][x];
-		all_score[i] += point_score[0][1][y];
-		all_score[i] += point_score[0][2][x - y + board_size];
-		all_score[i] += point_score[0][3][x + y];
+		all_score[i] += point_score[i][0][x];
+		all_score[i] += point_score[i][1][y];
+		all_score[i] += point_score[i][2][x - y + board_size];
+		all_score[i] += point_score[i][3][x + y];
 	}
 }
 
 LL PatternScore(Chess color, const string& line) {
+	//如果line中无1,则直接返回0
+	if (line.find("1") == string::npos) return 0;
 	LL totalScore = 0;
 	for (size_t i = 0; i < patterns.size(); i++) {
 		size_t pos = 0;
@@ -379,15 +388,6 @@ LL PatternScore(Chess color, const string& line) {
 
 void StartGame() {
 	char cmd[10];
-	//初始化棋盘
-	board[5][5] = White;
-	board[6][6] = White;
-	board[5][6] = Black;
-	board[6][5] = Black;
-	UpdateInfo(5, 5);
-	UpdateInfo(6, 6);
-	UpdateInfo(5, 6);
-	UpdateInfo(6, 5);
 
 	//主循环
 	while (1) {
@@ -400,9 +400,18 @@ void StartGame() {
 			field = (color == 1) ? Black : White;
 			printf("OK\n");
 			fflush(stdout);
+			opponent = (field == Black) ? White : Black;
+			//初始化棋盘
+			board[5][6] = Black;
+			UpdateInfo(5, 6);
+			board[5][5] = White;
+			UpdateInfo(5, 5);
+			board[6][5] = Black;
+			UpdateInfo(6, 5);
+			board[6][6] = White;
+			UpdateInfo(6, 6);
 			break;
 		}
-		opponent = (field == Black) ? White : Black;
 	}
 	//开始游戏
 	while (1) {
@@ -416,7 +425,7 @@ void StartGame() {
 		else if (strcmp(cmd, "PLACE") == 0) {//对方下棋
 			int x, y;
 			scanf("%d %d", &x, &y);
-			board[x][y] = field;
+			board[x][y] = opponent;
 			UpdateInfo(x, y);
 		}
 		//判断游戏结束
