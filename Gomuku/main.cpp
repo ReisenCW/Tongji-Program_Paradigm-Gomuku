@@ -26,7 +26,8 @@ public:
 	void end() {
 		auto end = std::chrono::high_resolution_clock::now();
 		auto dur = std::chrono::duration_cast<std::chrono::milliseconds>(end - m_begin);
-		printf("%s takes : %lld ms\n", m_msg.c_str(), dur.count());
+		printf("DEBUG %s takes : %lld ms\n", m_msg.c_str(), dur.count());
+		fflush(stdout);
 	}
 private:
 	std::chrono::time_point<std::chrono::high_resolution_clock> m_begin;
@@ -43,10 +44,10 @@ const int dpth = 3;
 const int MAX_SCORE = 10000000;
 const int MIN_SCORE = -10000000;
 const int FIVE_LINE = 100000;     // 五连分数
-const int LIVE_FOUR = 4320;     // 活四(在两个点上下都可以五连)分数
-const int BLOCK_FOUR = 720;       // 冲四(在唯一的一点上下可以五连)分数
-const int LIVE_THREE = 720;       // 活三(可以变成活4)分数
-const int BLOCK_THREE = 120;      // 眠三(可以变成冲4)分数
+const int LIVE_FOUR = 4000;     // 活四(在两个点上下都可以五连)分数
+const int BLOCK_FOUR = 2200;       // 冲四(在唯一的一点上下可以五连)分数
+const int LIVE_THREE = 2000/2;       // 活三(可以变成活4)分数
+const int BLOCK_THREE = 400;      // 眠三(可以变成冲4)分数
 const int LIVE_TWO = 120;          // 活二(可以变成活3)分数
 const int BLOCK_TWO = 40;          // 眠二(可以变成眠三)分数
 const int LIVE_ONE = 20;           // 活一(可以变成活二)分数
@@ -191,7 +192,7 @@ set<Point, PointComparator> GetPossibleMoves(Chess color) {
 		for (int j = minY; j <= maxY; j++) {
 			if (board[i][j] == None) {
 				int index = color == field ? 0 : 1;
-				if (point_score[index][0][i] >= LIVE_TWO || point_score[index][1][j] >= LIVE_TWO || point_score[index][2][i - j + board_size] >= LIVE_TWO || point_score[index][3][i + j] >= LIVE_TWO) {
+				if (point_score[index][0][i] >= 1 || point_score[index][1][j] >= 1 || point_score[index][2][i - j + board_size] >= 1 || point_score[index][3][i + j] >= 1) {
 					moves.insert({ i, j });
 				}
 			}
@@ -209,8 +210,9 @@ Point MakePlay(int depth) {
 	// 初始化 bestMove
 	bestMove = { {-1, -1}, MIN_SCORE };
 	//递归,计算模拟位置的分数
-	Alpha_Beta(opponent, MIN_SCORE, MAX_SCORE, depth);
+	Alpha_Beta(field, MIN_SCORE, MAX_SCORE, depth);
 	board[bestMove.p.x][bestMove.p.y] = field;
+	UpdateInfo(bestMove.p.x, bestMove.p.y);
 	return bestMove.p;
 }
 
