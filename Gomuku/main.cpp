@@ -92,43 +92,44 @@ LL point_score[2][4][board_size * 2];//[chess][direction][index],对于竖和横,会空
 Move bestMove = { {-1, -1} , MIN_SCORE};
 
 vector<Pattern> patterns = {
-	{ "11111" , FIVE_LINE   }, // 连五
-	{ "011110", LIVE_FOUR   }, // 活四
-	{ "211110", BLOCK_FOUR  }, // 冲四
-	{ "011112", BLOCK_FOUR  },
-	{ "11011" , BLOCK_FOUR  },
-	{ "10111" , BLOCK_FOUR  },
-	{ "11101" , BLOCK_FOUR  },
-	{ "011100", LIVE_THREE  }, // 活三
-	{ "001110", LIVE_THREE  },
-	{ "010110", LIVE_THREE  }, 
-	{ "011010", LIVE_THREE  },
-	{ "211100", BLOCK_THREE }, // 眠三
-	{ "001112", BLOCK_THREE },
-	{ "210110", BLOCK_THREE },
-	{ "010112", BLOCK_THREE },
-	{ "210011", BLOCK_THREE },
-	{ "110012", BLOCK_THREE },
-	{ "011000", LIVE_TWO    }, // 活二
-	{ "001100", LIVE_TWO    },
-	{ "000110", LIVE_TWO    },
-	{ "010100", LIVE_TWO    },
-	{ "001010", LIVE_TWO    },
-	{ "010010", LIVE_TWO    },
-	{ "211000", BLOCK_TWO   }, // 眠二
-	{ "210100", BLOCK_TWO   },
-	{ "000112", BLOCK_TWO   },
-	{ "001012", BLOCK_TWO   },
-	{ "210010", BLOCK_TWO   },
-	{ "010012", BLOCK_TWO   },
-	{ "210001", BLOCK_TWO   },
-	{ "100012", BLOCK_TWO   },
-	{ "010000", LIVE_ONE    }, // 活一
-	{ "001000", LIVE_ONE    },
-	{ "000100", LIVE_ONE    },
-	{ "000010", LIVE_ONE    },
-	{ "210000", BLOCK_ONE   }, // 眠一
-	{ "000012", BLOCK_ONE   }
+	{ "11111" ,  FIVE_LINE   }, // 连五
+	{ "011110",  LIVE_FOUR   }, // 活四
+	{ "211110",  BLOCK_FOUR  }, // 冲四
+	{ "011112",  BLOCK_FOUR  },
+	{ "11011" ,  BLOCK_FOUR  },
+	{ "10111" ,  BLOCK_FOUR  },
+	{ "11101" ,  BLOCK_FOUR  },
+	{ "0011100", LIVE_THREE }, // 活三
+	{ "0011102", LIVE_THREE },
+	{ "2011100", LIVE_THREE },
+	{ "010110",  LIVE_THREE  }, 
+	{ "011010",  LIVE_THREE  },
+	{ "211100",  BLOCK_THREE }, // 眠三
+	{ "001112",  BLOCK_THREE },
+	{ "210110",  BLOCK_THREE },
+	{ "010112",  BLOCK_THREE },
+	{ "210011",  BLOCK_THREE },
+	{ "110012",  BLOCK_THREE },
+	{ "011000",  LIVE_TWO    }, // 活二
+	{ "001100",  LIVE_TWO    },
+	{ "000110",  LIVE_TWO    },
+	{ "010100",  LIVE_TWO    },
+	{ "001010",  LIVE_TWO    },
+	{ "010010",  LIVE_TWO    },
+	{ "211000",  BLOCK_TWO   }, // 眠二
+	{ "210100",  BLOCK_TWO   },
+	{ "000112",  BLOCK_TWO   },
+	{ "001012",  BLOCK_TWO   },
+	{ "210010",  BLOCK_TWO   },
+	{ "010012",  BLOCK_TWO   },
+	{ "210001",  BLOCK_TWO   },
+	{ "100012",  BLOCK_TWO   },
+	{ "010000",  LIVE_ONE    }, // 活一
+	{ "001000",  LIVE_ONE    },
+	{ "000100",  LIVE_ONE    },
+	{ "000010",  LIVE_ONE    },
+	{ "210000",  BLOCK_ONE   }, // 眠一
+	{ "000012",  BLOCK_ONE   }
 };
 
 //评估函数
@@ -155,6 +156,37 @@ void UpdateInfo(int x, int y) {
 	UpdateScore(x, y);
 }
 
+#if _DEBUG_
+//打印棋盘
+void PrintBoard() {
+	printf("\nDEBUG Board:\n");
+	// 打印列号
+	printf("  ");
+	for (int j = 0; j < board_size; j++) {
+		printf("\033[32m%x \033[0m", j); // 绿色
+	}
+	printf("\n");
+
+	for (int i = 0; i < board_size; i++) {
+		// 打印行号
+		printf("\033[32m%x \033[0m", i); // 绿色
+		for (int j = 0; j < board_size; j++) {
+			if (board[i][j] == None) {
+				printf("0 ");
+			}
+			else if (board[i][j] == Black) {
+				printf("\033[31m1 \033[0m"); // 红色
+			}
+			else {
+				printf("\033[33m2 \033[0m"); // 黄色
+			}
+		}
+		printf("\n");
+	}
+	printf("\n");
+	fflush(stdout);
+}
+#endif
 
 //********************************************************************************
 //main函数
@@ -181,7 +213,7 @@ set<Point, PointComparator> GetPossibleMoves(Chess color) {
 		}
 	}
 
-	// 扩展5格的范围
+	// 扩展2格的范围
 	minX = max(0, minX - 2);
 	maxX = min(board_size - 1, maxX + 2);
 	minY = max(0, minY - 2);
@@ -191,10 +223,8 @@ set<Point, PointComparator> GetPossibleMoves(Chess color) {
 	for (int i = minX; i <= maxX; i++) {
 		for (int j = minY; j <= maxY; j++) {
 			if (board[i][j] == None) {
-				int index = color == field ? 0 : 1;
-				if (point_score[index][0][i] >= 1 || point_score[index][1][j] >= 1 || point_score[index][2][i - j + board_size] >= 1 || point_score[index][3][i + j] >= 1) {
-					moves.insert({ i, j });
-				}
+				if (EvaluatePosition(color, i, j) > 0)
+					moves.insert({ i, j });//按照评估分数从大到小排序
 			}
 		}
 	}
@@ -265,49 +295,57 @@ LL Evaluate(Chess color) {
 }
 
 LL EvaluatePosition(Chess color, int x, int y) {
-	//类似于UpdateScore,但是并非更新,而是计算并返回一个位置的分数,用于模拟落子的过程
+	//类似于UpdateScore,但是并非更新,而是计算并返回一个None位置下子color得到的分数(己方-敌方),用于模拟落子的过程
 	//评估时只考虑左右(水平时)各5格的棋子情况
+	if (board[x][y] != None) return 0;
+	board[x][y] = color;
+	Chess opp = (color == Black) ? White : Black;
+	//初始化pattern
 	string myPattern[4];//大小为4,分别存储横,竖,左上-右下,右上-左下的棋子pattern
 	string oppoPattern[4];
 	//横向
 	for (int i = max(0, x - 5); i < min(board_size, x + 6); i++) {
-		myPattern[0] += (board[i][y] == field) ? '1' : (board[i][y] == None ? '0' : '2');
-		oppoPattern[0] += (board[i][y] == opponent) ? '1' : (board[i][y] == None ? '0' : '2');
+		myPattern[0] += (board[i][y] == color) ? '1' : (board[i][y] == None ? '0' : '2');
+		oppoPattern[0] += (board[i][y] == opp) ? '1' : (board[i][y] == None ? '0' : '2');
 	}
 	//纵向
 	for (int i = max(0, y - 5); i < min(board_size, y + 6); i++) {
-		myPattern[1] += (board[x][i] == field) ? '1' : (board[x][i] == None ? '0' : '2');
-		oppoPattern[1] += (board[x][i] == opponent) ? '1' : (board[x][i] == None ? '0' : '2');
+		myPattern[1] += (board[x][i] == color) ? '1' : (board[x][i] == None ? '0' : '2');
+		oppoPattern[1] += (board[x][i] == opp) ? '1' : (board[x][i] == None ? '0' : '2');
 	}
 	//左上-右下
 	for (int i = max(0, x - min(5, min(x , y))), j = max(0, y - min(5, min(x, y))); i < min(board_size, x + 6) && j < min(board_size, y + 6); i++, j++) {
-		myPattern[2] += (board[i][j] == field) ? '1' : (board[i][j] == None ? '0' : '2');
-		oppoPattern[2] += (board[i][j] == opponent) ? '1' : (board[i][j] == None ? '0' : '2');
+		myPattern[2] += (board[i][j] == color) ? '1' : (board[i][j] == None ? '0' : '2');
+		oppoPattern[2] += (board[i][j] == opp) ? '1' : (board[i][j] == None ? '0' : '2');
 	}
 	//右上-左下
 	for (int i = max(0, x + min(5, min(y, board_size - 1 - x))), j = max(0, y - min(5, min(y, board_size - 1 - x))); i >= 0 && j < min(board_size, y + 6); i--, j++) {
-		myPattern[3] += (board[i][j] == field) ? '1' : (board[i][j] == None ? '0' : '2');
-		oppoPattern[3] += (board[i][j] == opponent) ? '1' : (board[i][j] == None ? '0' : '2');
+		myPattern[3] += (board[i][j] == color) ? '1' : (board[i][j] == None ? '0' : '2');
+		oppoPattern[3] += (board[i][j] == opp) ? '1' : (board[i][j] == None ? '0' : '2');
 	}
 
-	LL myScore[4] = { 0 };
-	LL oppoScore[4] = { 0 };
+	LL myScore = 0;
+	LL oppoScore = 0;
 
-	//计算分数
 	for (int i = 0; i < 4; i++) {
 		//计算己方分数
-		myScore[i] += PatternScore(field, myPattern[i]);
+		myScore += PatternScore(color, myPattern[i]);
 		//计算对方分数
-		oppoScore[i] += PatternScore(opponent, oppoPattern[i]);
+		oppoScore += PatternScore(opp, oppoPattern[i]);
 	}
 
-	//返回分数
-	LL totalValue = 0;
-	for (int i = 0; i < 4; i++) {
-		totalValue += myScore[i];
-		totalValue -= oppoScore[i];
-	}
-	return totalValue;
+	//myScore和oppoScore分别减去模拟落子前情况的分数
+	myScore -= point_score[0][0][x];
+	myScore -= point_score[0][1][y];
+	myScore -= point_score[0][2][x - y + board_size];
+	myScore -= point_score[0][3][x + y];
+	oppoScore -= point_score[1][0][x];
+	oppoScore -= point_score[1][1][y];
+	oppoScore -= point_score[1][2][x - y + board_size];
+	oppoScore -= point_score[1][3][x + y];
+	
+	board[x][y] = None;
+	return myScore - oppoScore;
 }
 
 
@@ -421,6 +459,9 @@ void StartGame() {
 
 		if (strcmp(cmd, "TURN") == 0) {//己方下棋
 			Point p = MakePlay(dpth);
+#if _DEBUG_
+			PrintBoard();
+#endif
 			printf("%d %d\n", p.x, p.y);
 			fflush(stdout);
 		}
@@ -432,10 +473,15 @@ void StartGame() {
 		}
 		//判断游戏结束
 		if (strcmp(cmd, "END") == 0) {
+#if _DEBUG_
 			int w;
 			scanf("%d", &w);
-#if _DEBUG_
-			cout << "winner is " << w << endl;
+			if(w == 1){
+				printf("DEBUG winner is Black\n");
+			}
+			else {
+				printf("DEBUG winner is White\n");
+			}
 #endif
 			break;
 		}
