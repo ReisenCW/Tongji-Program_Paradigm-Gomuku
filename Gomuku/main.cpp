@@ -7,38 +7,19 @@
 #include <vector>
 #include <algorithm>
 #include <unordered_map>
+#include <queue>
 using namespace std;
 
 #define _DEBUG_ 1
 #define _ONLINE_DEBUG_ 0
 #define _TIMER_ 1
 
-//计时器
-#if _TIMER_
-#include <chrono>
-#include <string>
-class Timer {
-public:
-	Timer(const string& msg) : m_begin(std::chrono::high_resolution_clock::now()), m_msg(msg) {}
-	~Timer() {
-		end();
-	}
-	void end() {
-		auto end = std::chrono::high_resolution_clock::now();
-		auto dur = std::chrono::duration_cast<std::chrono::milliseconds>(end - m_begin);
-		printf("DEBUG %s takes : %lld ms\n", m_msg.c_str(), dur.count());
-		fflush(stdout);
-	}
-private:
-	std::chrono::time_point<std::chrono::high_resolution_clock> m_begin;
-	string m_msg;
-};
-#endif
-
 //常量与def
 typedef long long LL;
 const int board_size = 12;
 const int dpth = 4;
+const int hashIndexSize = 0xffff;//掩码,用于限制位数(二进制对应1111111111111111)
+const int hashNoneScore = 99999999;//置换表中的空值
 
 //分数评估表
 const int MAX_SCORE = 10000000;
@@ -81,76 +62,76 @@ struct Pattern {
 	int score;
 };
 
-//保存棋局
 struct HashItem {
-	long long checksum;
+	LL checksum;
 	int depth;
-	int score;
+	LL score;
 	enum Flag { ALPHA = 0, BETA = 1, EXACT = 2, EMPTY = 3 } flag;
 };
-
 
 //全局变量
 Chess field; // 己方颜色
 Chess opponent; // 对方颜色
 Chess board[board_size][board_size] = { None }; // 棋盘
 LL all_score[2]; // 总分数,all_score[0]为己方分数,all_score[1]为对方分数
-// point_score[0]为己方分数,point_score[1]为对方分数,point_score[0]的[0],[1],[2],[3]分别存储横,竖,左上-右下,右上-左下的直线分数
 LL point_score[2][4][board_size * 2];//[chess][direction][index],对于竖和横,会空出来board_size个位置
 Move bestMove = { {-1, -1} , MIN_SCORE };
+//zobrist
+LL boardZobristValue[2][board_size][board_size];//棋盘每个位置的Zobrist值,用于计算当前局面的Zobrist值
+LL currentZobristValue;//每一个局面对应一个Zobrist值,currentZobristValue为当前局面的Zobrist值
 
-vector<Pattern> patterns = {
-	{ "11111" ,  FIVE_LINE   }, // 连五
-	{ "011110",  LIVE_FOUR   }, // 活四
-	{ "211110",  BLOCK_FOUR  }, // 冲四
-	{ "011112",  BLOCK_FOUR  },
-	{ "11011" ,  BLOCK_FOUR  },
-	{ "10111" ,  BLOCK_FOUR  },
-	{ "11101" ,  BLOCK_FOUR  },
-	{ "0011100", LIVE_THREE }, // 活三
-	{ "0011102", LIVE_THREE },
-	{ "2011100", LIVE_THREE },
-	{ "010110",  LIVE_THREE  },
-	{ "011010",  LIVE_THREE  },
-	{ "211100",  BLOCK_THREE }, // 眠三
-	{ "001112",  BLOCK_THREE },
-	{ "210110",  BLOCK_THREE },
-	{ "010112",  BLOCK_THREE },
-	{ "210011",  BLOCK_THREE },
-	{ "110012",  BLOCK_THREE },
-	{ "011000",  LIVE_TWO    }, // 活二
-	{ "001100",  LIVE_TWO    },
-	{ "000110",  LIVE_TWO    },
-	{ "010100",  LIVE_TWO    },
-	{ "001010",  LIVE_TWO    },
-	{ "010010",  LIVE_TWO    },
-	{ "211000",  BLOCK_TWO   }, // 眠二
-	{ "210100",  BLOCK_TWO   },
-	{ "000112",  BLOCK_TWO   },
-	{ "001012",  BLOCK_TWO   },
-	{ "210010",  BLOCK_TWO   },
-	{ "010012",  BLOCK_TWO   },
-	{ "210001",  BLOCK_TWO   },
-	{ "100012",  BLOCK_TWO   },
-	{ "010000",  LIVE_ONE    }, // 活一
-	{ "001000",  LIVE_ONE    },
-	{ "000100",  LIVE_ONE    },
-	{ "000010",  LIVE_ONE    },
-	{ "210000",  BLOCK_ONE   }, // 眠一
-	{ "000012",  BLOCK_ONE   }
-};
+//vector<Pattern> patterns = {
+//	{ "11111" ,  FIVE_LINE   }, // 连五
+//	{ "011110",  LIVE_FOUR   }, // 活四
+//	{ "211110",  BLOCK_FOUR  }, // 冲四
+//	{ "011112",  BLOCK_FOUR  },
+//	{ "11011" ,  BLOCK_FOUR  },
+//	{ "10111" ,  BLOCK_FOUR  },
+//	{ "11101" ,  BLOCK_FOUR  },
+//	{ "0011100", LIVE_THREE }, // 活三
+//	{ "0011102", LIVE_THREE },
+//	{ "2011100", LIVE_THREE },
+//	{ "010110",  LIVE_THREE  },
+//	{ "011010",  LIVE_THREE  },
+//	{ "211100",  BLOCK_THREE }, // 眠三
+//	{ "001112",  BLOCK_THREE },
+//	{ "210110",  BLOCK_THREE },
+//	{ "010112",  BLOCK_THREE },
+//	{ "210011",  BLOCK_THREE },
+//	{ "110012",  BLOCK_THREE },
+//	{ "011000",  LIVE_TWO    }, // 活二
+//	{ "001100",  LIVE_TWO    },
+//	{ "000110",  LIVE_TWO    },
+//	{ "010100",  LIVE_TWO    },
+//	{ "001010",  LIVE_TWO    },
+//	{ "010010",  LIVE_TWO    },
+//	{ "211000",  BLOCK_TWO   }, // 眠二
+//	{ "210100",  BLOCK_TWO   },
+//	{ "000112",  BLOCK_TWO   },
+//	{ "001012",  BLOCK_TWO   },
+//	{ "210010",  BLOCK_TWO   },
+//	{ "010012",  BLOCK_TWO   },
+//	{ "210001",  BLOCK_TWO   },
+//	{ "100012",  BLOCK_TWO   },
+//	{ "010000",  LIVE_ONE    }, // 活一
+//	{ "001000",  LIVE_ONE    },
+//	{ "000100",  LIVE_ONE    },
+//	{ "000010",  LIVE_ONE    },
+//	{ "210000",  BLOCK_ONE   }, // 眠一
+//	{ "000012",  BLOCK_ONE   }
+//};
 
 //评估函数
 LL Evaluate(Chess color);//总评估函数(评估整个棋盘)
 LL EvaluatePosition(Chess color, int x, int y);//评估某一位置
-LL PatternScore(Chess color, const string& line);//搜索模式,返回各个匹配的模式的分数
+//LL PatternScore(Chess color, const string& line);//搜索模式,返回各个匹配的模式的分数
 void UpdateScore(int x, int y);//更新分数表
 
 //搜索函数
 LL Alpha_Beta(Chess color, LL alpha, LL beta, int depth);//alpha-beta剪枝
 Point MakePlay(int depth);//己方下棋
 
-//游戏函数
+//主函数
 void StartGame();//游戏主循环
 
 //其它函数
@@ -163,7 +144,214 @@ set<Point, PointComparator> GetPossibleMoves(Chess color);//获取所有可能的落子位
 void UpdateInfo(int x, int y) {
 	UpdateScore(x, y);
 }
+//置换表
+//zobrist
+// 生成64位随机数
+LL Random64() {
+	return (LL)rand() | ((LL)rand() << 15) | ((LL)rand() << 30) | ((LL)rand() << 45) | ((LL)rand() << 60);
+}
 
+// 初始化随机数表
+void RandomBoardZobristValue() {
+	for (int i = 0; i < 2; i++) {
+		for (int j = 0; j < board_size; j++) {
+			for (int k = 0; k < board_size; k++) {
+				boardZobristValue[i][j][k] = Random64();
+			}
+		}
+	}
+}
+
+// 初始化初始局面的Zobrist值
+void InitCurrentZobristValue() {
+	currentZobristValue = 0;
+	for (int i = 0; i < board_size; i++) {
+		for (int j = 0; j < board_size; j++) {
+			if (board[i][j] != None) {
+				currentZobristValue ^= boardZobristValue[(int)board[i][j] - 1][i][j];
+			}
+		}
+	}
+}
+
+// 更新Zobrist值
+void UpdateZobristValue(int x, int y, Chess color) {
+	currentZobristValue ^= boardZobristValue[(int)color - 1][x][y];
+}
+//存储已经计算过的棋局评分。每个条目包含局面的哈希值、评分、深度和评分类型
+HashItem hashItems[hashIndexSize+1];//下标范围0-1111111111111111
+
+//记录置换表信息
+void RecordHashItem(int depth, LL score, HashItem::Flag flag) {
+	int index = currentZobristValue & hashIndexSize;
+	//仅在以下两种情况下更新置换表: 
+		// 1.置换表为空    
+		// 2.当前递归深度大于置换表深度,说明当前信息更精准,则替换掉置换表内的信息
+	if (hashItems[index].flag == HashItem::EMPTY || hashItems[index].depth < depth) {
+		hashItems[index].checksum = currentZobristValue;
+		hashItems[index].depth = depth;
+		hashItems[index].score = score;
+		hashItems[index].flag = flag;
+	}
+}
+
+//取置换表信息
+LL GetHashScore(int depth, int alpha, int beta) {
+	int index = currentZobristValue & hashIndexSize;
+	//空值
+	if (hashItems[index].flag == HashItem::EMPTY) {
+		return hashNoneScore;
+	}
+	if (hashItems[index].checksum == currentZobristValue) {
+		//若哈希表深度>=当前深度,则可信,返回哈希表中的值
+		if (hashItems[index].depth >= depth) {
+			//准确值则直接返回
+			if (hashItems[index].flag == HashItem::EXACT) {
+				return hashItems[index].score;
+			}
+			//alpha值说明存储的值是一个下限值(不被敌方剪枝的情况下的最大值)
+			if (hashItems[index].flag == HashItem::ALPHA && hashItems[index].score <= alpha) {
+				return alpha;
+			}
+			//beta值说明存储的值是一个上限值(不被己方剪枝的情况下的最小值)
+			if (hashItems[index].flag == HashItem::BETA && hashItems[index].score >= beta) {
+				return beta;
+			}
+		}
+	}
+	return hashNoneScore;
+}
+
+//AC自动机实现字符串匹配,用于查找棋型
+class TrieNode;
+class AC_Auto;
+//Trie树节点
+class TrieNode {
+public:
+	friend class AC_Auto;
+	TrieNode() : fail(-1), next{-1, -1, -1}, length(0), score(0){}
+private:
+	char data;//节点存储的字符
+	int fail;//失败指针
+	int next[3];//子节点
+	int length;//当前节点代表的字符串长度
+	int score;//当前节点代表的字符串的分数
+};
+
+//AC自动机
+class AC_Auto {
+public:
+	AC_Auto();
+	void BuildTrieTree();
+	void BuildFailPointer();
+	LL PatternScore(const string& text);
+private:
+	vector<TrieNode> nodes;//Trie树
+	vector<string> patterns;//模式串
+	vector<int> scores;//模式串对应的分数
+}AC_Searcher;
+
+AC_Auto::AC_Auto() 
+	: patterns({ "11111", "011110", "211110", "011112", "11011", "10111", "11101", "0011100", "0011102", 
+	             "2011100", "010110", "011010", "211100", "001112", "210110", "010112", "210011", "110012", "011000", 
+	             "001100", "000110", "010100", "001010", "010010", "211000", "210100", "000112", "001012", "210010", 
+	             "010012","210001", "100012", "010000", "001000", "000100", "000010", "210000", "000012" }), //38
+	  scores({ FIVE_LINE, LIVE_FOUR, BLOCK_FOUR, BLOCK_FOUR, BLOCK_FOUR, BLOCK_FOUR, BLOCK_FOUR, LIVE_THREE, LIVE_THREE, 
+		       LIVE_THREE, LIVE_THREE, LIVE_THREE, BLOCK_THREE, BLOCK_THREE, BLOCK_THREE, BLOCK_THREE, BLOCK_THREE, BLOCK_THREE,
+		       LIVE_TWO, LIVE_TWO, LIVE_TWO, LIVE_TWO, LIVE_TWO, LIVE_TWO, BLOCK_TWO, BLOCK_TWO, BLOCK_TWO, BLOCK_TWO,
+		       BLOCK_TWO, BLOCK_TWO, BLOCK_TWO, BLOCK_TWO, LIVE_ONE, LIVE_ONE, LIVE_ONE, LIVE_ONE, BLOCK_ONE , BLOCK_ONE})
+{
+	nodes.resize(104);
+}
+
+void AC_Auto::BuildTrieTree() {
+	nodes.push_back(TrieNode());
+	int newNodeIndex = 1;
+	for (int i = 0; i < patterns.size(); i++) {
+		int cur = 0;
+		for (char c : patterns[i]) {
+			int index = c - '0';
+			if (nodes[cur].next[index] == -1) {
+				nodes[cur].next[index] = newNodeIndex;
+				nodes[newNodeIndex] = TrieNode();
+				nodes[newNodeIndex].data = c;
+				newNodeIndex++;
+			}
+			cur = nodes[cur].next[index];//cur指针向下一个字符
+		}
+		nodes[cur].length = patterns[i].length();//记录模式串的长度
+		nodes[cur].score = scores[i];//记录分数
+	}
+}
+
+void AC_Auto::BuildFailPointer() {
+	queue<int> q;
+	for (int i = 0; i < 3; i++) {//root节点的子节点的fail指针都指向root节点
+		nodes[nodes[0].next[i]].fail = 0;
+		q.push(nodes[0].next[i]);
+	}
+	while (!q.empty()) {
+		int cur = q.front();//取队头
+		q.pop();
+		for (int i = 0; i < 3; ++i) {
+			if (nodes[cur].next[i] != -1) {//如果当前节点的有匹配的子节点
+				int fail = nodes[cur].fail;//子节点的fail指针初始化为当前节点的fail指针
+				while (nodes[fail].next[i] == -1) {//fail指针指向的节点没有对应的子节点,则继续向上跳转
+					fail = nodes[fail].fail;
+				}
+				nodes[nodes[cur].next[i]].fail = nodes[fail].next[i];//子节点的fail指针指向fail节点的对应子节点
+				q.push(nodes[cur].next[i]);//将子节点加入队列
+			}
+		}
+	}
+}
+
+LL AC_Auto::PatternScore(const string& text) {
+	int cur = 0;
+	LL totalScore = 0;
+	for (int i = 0; i < text.size(); i++) {
+		int c = text[i] - '0';
+		while (nodes[cur].next[c] == -1 && cur != 0) {//如果当前节点没有对应的子节点,则匹配失败,跳转到fail指针
+			cur = nodes[cur].fail;
+		}
+		cur = nodes[cur].next[c];//如果有对应的子节点,则指针指向子节点
+		if (cur == -1) cur = 0;//如果当前指针cur为-1,说明前面的fail指针全部匹配失败,则指针指向根节点
+		int temp = cur;
+		while (temp != 0) {
+			//如果length为0,说明当前节点不是一个模式串的结尾,则不会进入循环
+			//如果length不为0,则说明当前节点是一个模式串的结尾,则计算分数
+			totalScore += nodes[temp].score;
+			temp = nodes[temp].fail;
+		}
+	}
+	return totalScore;
+}
+
+/******************************************************************************************************/
+/***********************************************调试函数************************************************/
+//Timer
+#if _TIMER_
+#include <chrono>
+#include <string>
+class Timer {
+public:
+	Timer(const string& msg) : m_begin(std::chrono::high_resolution_clock::now()), m_msg(msg) {}
+	~Timer() {
+		end();
+	}
+	void end() {
+		auto end = std::chrono::high_resolution_clock::now();
+		auto dur = std::chrono::duration_cast<std::chrono::milliseconds>(end - m_begin);
+		printf("DEBUG %s takes : %lld ms\n", m_msg.c_str(), dur.count());
+		fflush(stdout);
+	}
+private:
+	std::chrono::time_point<std::chrono::high_resolution_clock> m_begin;
+	string m_msg;
+};
+#endif
+
+//DEBUG打印棋盘
 #if _DEBUG_
 //打印棋盘
 void PrintBoard() {
@@ -195,16 +383,9 @@ void PrintBoard() {
 	fflush(stdout);
 }
 #endif
-
-//********************************************************************************
-//main函数
-int main() {
-	StartGame();
-	return 0;
-}
-//********************************************************************************
-
-//功能函数实现
+/***********************************************调试函数************************************************/
+//*****************************************************************************************************
+//函数实现
 set<Point, PointComparator> GetPossibleMoves(Chess color) {
 	set<Point, PointComparator> moves;
 	int minX = board_size, maxX = 0, minY = board_size, maxY = 0;
@@ -255,8 +436,18 @@ Point MakePlay(int depth) {
 }
 
 LL Alpha_Beta(Chess color, LL alpha, LL beta, int depth) {
+	HashItem::Flag flag = HashItem::ALPHA;
+	LL score = GetHashScore(depth, alpha, beta);
+	//从第二次递归开始,如果置换表中有值,则直接返回
+	if (score != hashNoneScore && depth != dpth) {
+		return score;
+	}
+
+	//递归到最后一层,直接返回评估值,以Exact方式存入置换表
 	if (depth == 0) {
-		return Evaluate(color) - Evaluate((color == Black) ? White : Black);
+		LL val = Evaluate(color) - Evaluate((color == Black) ? White : Black);
+		RecordHashItem(depth, val, HashItem::EXACT);
+		return val;
 	}
 
 	set<Point, PointComparator> Moves = GetPossibleMoves(color);
@@ -269,20 +460,24 @@ LL Alpha_Beta(Chess color, LL alpha, LL beta, int depth) {
 		if (cnt > 10) break;
 		//模拟落子
 		board[p.x][p.y] = color;
+		UpdateZobristValue(p.x, p.y, color);
 		UpdateInfo(p.x, p.y);
 
 		//递归,计算模拟位置的分数
 		LL val = -Alpha_Beta(oppo, -beta, -alpha, depth - 1);//以对手视角进行评估
 		//还原棋盘
 		board[p.x][p.y] = None;
+		UpdateZobristValue(p.x, p.y, color);
 		UpdateInfo(p.x, p.y);
 		//alpha-beta剪枝
 		//对手视角,取最小值,如果当前值已经大于beta了,则对手不会选择这个位置,直接返回beta
 		if (val >= beta) {
+			RecordHashItem(depth, beta, HashItem::BETA);
 			return beta;
 		}
 		//己方视角,取最大值
 		if (val > alpha) {
+			flag = HashItem::EXACT;
 			alpha = val;
 			if (depth == dpth) {
 				bestMove = { p, alpha };
@@ -290,6 +485,7 @@ LL Alpha_Beta(Chess color, LL alpha, LL beta, int depth) {
 		}
 		cnt++;
 	}
+	RecordHashItem(depth, alpha, flag);
 	return alpha;
 }
 
@@ -337,9 +533,9 @@ LL EvaluatePosition(Chess color, int x, int y) {
 
 	for (int i = 0; i < 4; i++) {
 		//计算己方分数
-		myScore += PatternScore(color, myPattern[i]);
+		myScore += AC_Searcher.PatternScore(myPattern[i]);
 		//计算对方分数
-		oppoScore += PatternScore(opp, oppoPattern[i]);
+		oppoScore += AC_Searcher.PatternScore(oppoPattern[i]);
 	}
 
 	//myScore和oppoScore分别减去模拟落子前情况的分数
@@ -388,9 +584,9 @@ void UpdateScore(int x, int y) {
 
 	for (int i = 0; i < 4; i++) {
 		//计算己方分数
-		myScore[i] += PatternScore(field, myPattern[i]);
+		myScore[i] += AC_Searcher.PatternScore(myPattern[i]);
 		//计算对方分数
-		oppoScore[i] += PatternScore(opponent, oppoPattern[i]);
+		oppoScore[i] += AC_Searcher.PatternScore(oppoPattern[i]);
 	}
 
 	//更新分数
@@ -420,45 +616,58 @@ void UpdateScore(int x, int y) {
 	}
 }
 
-LL PatternScore(Chess color, const string& line) {
-	//如果line中无1,则直接返回0
-	if (line.find("1") == string::npos) return 0;
-	LL totalScore = 0;
-	double colorRate = (color == White) ? 0.45 : 1;
-	for (size_t i = 0; i < patterns.size(); i++) {
-		size_t pos = 0;
-		while ((pos = line.find(patterns[i].pattern, pos)) != string::npos) {
-			totalScore += (LL)(colorRate*patterns[i].score);
-			pos += patterns[i].pattern.size();
-		}
-	}
-	return totalScore;
+//LL PatternScore(Chess color, const string& line) {
+//	//如果line中无1,则直接返回0
+//	if (line.find("1") == string::npos) return 0;
+//	LL totalScore = 0;
+//	double colorRate = (color == White) ? 0.45 : 1;
+//	for (size_t i = 0; i < patterns.size(); i++) {
+//		size_t pos = 0;
+//		while ((pos = line.find(patterns[i].pattern, pos)) != string::npos) {
+//			totalScore += (LL)(colorRate * patterns[i].score);
+//			pos += patterns[i].pattern.size();
+//		}
+//	}
+//	return totalScore;
+//}
+
+void InitGame() {
+	//初始化Zobrist
+	RandomBoardZobristValue();
+	InitCurrentZobristValue();
+	//初始AC自动机
+	AC_Searcher.BuildTrieTree();
+	AC_Searcher.BuildFailPointer();
+	//初始化棋盘
+	board[5][6] = Black;
+	UpdateInfo(5, 6);
+	UpdateZobristValue(5, 6, Black);
+	board[5][5] = White;
+	UpdateZobristValue(5, 5, White);
+	UpdateInfo(5, 5);
+	board[6][5] = Black;
+	UpdateZobristValue(6, 5, Black);
+	UpdateInfo(6, 5);
+	board[6][6] = White;
+	UpdateZobristValue(6, 6, White);
+	UpdateInfo(6, 6);
 }
 
+//主函数
 void StartGame() {
 	char cmd[10];
-
 	//主循环
 	while (1) {
 		// 接收指令
 		int color = 0;
 		scanf("%s %d", cmd, &color);
-
 		// 检查指令是否为 START
 		if (strcmp(cmd, "START") == 0 && (color == 1 || color == 2)) {
 			field = (color == 1) ? Black : White;
 			printf("OK\n");
 			fflush(stdout);
 			opponent = (field == Black) ? White : Black;
-			//初始化棋盘
-			board[5][6] = Black;
-			UpdateInfo(5, 6);
-			board[5][5] = White;
-			UpdateInfo(5, 5);
-			board[6][5] = Black;
-			UpdateInfo(6, 5);
-			board[6][6] = White;
-			UpdateInfo(6, 6);
+			InitGame();
 			break;
 		}
 	}
@@ -478,6 +687,7 @@ void StartGame() {
 			int x, y;
 			scanf("%d %d", &x, &y);
 			board[x][y] = opponent;
+			UpdateZobristValue(x, y, opponent);
 			UpdateInfo(x, y);
 		}
 		//判断游戏结束
@@ -495,4 +705,10 @@ void StartGame() {
 			break;
 		}
 	}
+}
+
+//main函数
+int main() {
+	StartGame();
+	return 0;
 }
