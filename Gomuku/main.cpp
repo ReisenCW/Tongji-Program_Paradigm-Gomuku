@@ -9,7 +9,7 @@
 #include <unordered_map>
 using namespace std;
 
-#define _DEBUG_ 0
+#define _DEBUG_ 1
 #define _ONLINE_DEBUG_ 0
 #define _TIMER_ 1
 
@@ -19,7 +19,7 @@ using namespace std;
 #include <string>
 class Timer {
 public:
-	Timer(const string& msg) : m_begin(std::chrono::high_resolution_clock::now()), m_msg(msg){}
+	Timer(const string& msg) : m_begin(std::chrono::high_resolution_clock::now()), m_msg(msg) {}
 	~Timer() {
 		end();
 	}
@@ -38,16 +38,16 @@ private:
 //常量与def
 typedef long long LL;
 const int board_size = 12;
-const int dpth = 3;
+const int dpth = 4;
 
 //分数评估表
 const int MAX_SCORE = 10000000;
 const int MIN_SCORE = -10000000;
-const int FIVE_LINE = 100000;     // 五连分数
-const int LIVE_FOUR = 4000;     // 活四(在两个点上下都可以五连)分数
+const int FIVE_LINE = 1000000;     // 五连分数
+const int LIVE_FOUR = 4000;        // 活四(在两个点上下都可以五连)分数
 const int BLOCK_FOUR = 2200;       // 冲四(在唯一的一点上下可以五连)分数
-const int LIVE_THREE = 2000/2;       // 活三(可以变成活4)分数
-const int BLOCK_THREE = 400;      // 眠三(可以变成冲4)分数
+const int LIVE_THREE = 2000 / 2;   // 活三(可以变成活4)分数
+const int BLOCK_THREE = 400;       // 眠三(可以变成冲4)分数
 const int LIVE_TWO = 120;          // 活二(可以变成活3)分数
 const int BLOCK_TWO = 40;          // 眠二(可以变成眠三)分数
 const int LIVE_ONE = 20;           // 活一(可以变成活二)分数
@@ -81,6 +81,14 @@ struct Pattern {
 	int score;
 };
 
+//保存棋局
+struct HashItem {
+	long long checksum;
+	int depth;
+	int score;
+	enum Flag { ALPHA = 0, BETA = 1, EXACT = 2, EMPTY = 3 } flag;
+};
+
 
 //全局变量
 Chess field; // 己方颜色
@@ -89,7 +97,7 @@ Chess board[board_size][board_size] = { None }; // 棋盘
 LL all_score[2]; // 总分数,all_score[0]为己方分数,all_score[1]为对方分数
 // point_score[0]为己方分数,point_score[1]为对方分数,point_score[0]的[0],[1],[2],[3]分别存储横,竖,左上-右下,右上-左下的直线分数
 LL point_score[2][4][board_size * 2];//[chess][direction][index],对于竖和横,会空出来board_size个位置
-Move bestMove = { {-1, -1} , MIN_SCORE};
+Move bestMove = { {-1, -1} , MIN_SCORE };
 
 vector<Pattern> patterns = {
 	{ "11111" ,  FIVE_LINE   }, // 连五
@@ -102,7 +110,7 @@ vector<Pattern> patterns = {
 	{ "0011100", LIVE_THREE }, // 活三
 	{ "0011102", LIVE_THREE },
 	{ "2011100", LIVE_THREE },
-	{ "010110",  LIVE_THREE  }, 
+	{ "010110",  LIVE_THREE  },
 	{ "011010",  LIVE_THREE  },
 	{ "211100",  BLOCK_THREE }, // 眠三
 	{ "001112",  BLOCK_THREE },
@@ -230,7 +238,7 @@ set<Point, PointComparator> GetPossibleMoves(Chess color) {
 	}
 
 	return moves;
-	}
+}
 
 
 Point MakePlay(int depth) {
@@ -262,7 +270,7 @@ LL Alpha_Beta(Chess color, LL alpha, LL beta, int depth) {
 		//模拟落子
 		board[p.x][p.y] = color;
 		UpdateInfo(p.x, p.y);
-		
+
 		//递归,计算模拟位置的分数
 		LL val = -Alpha_Beta(oppo, -beta, -alpha, depth - 1);//以对手视角进行评估
 		//还原棋盘
@@ -314,7 +322,7 @@ LL EvaluatePosition(Chess color, int x, int y) {
 		oppoPattern[1] += (board[x][i] == opp) ? '1' : (board[x][i] == None ? '0' : '2');
 	}
 	//左上-右下
-	for (int i = max(0, x - min(5, min(x , y))), j = max(0, y - min(5, min(x, y))); i < min(board_size, x + 6) && j < min(board_size, y + 6); i++, j++) {
+	for (int i = max(0, x - min(5, min(x, y))), j = max(0, y - min(5, min(x, y))); i < min(board_size, x + 6) && j < min(board_size, y + 6); i++, j++) {
 		myPattern[2] += (board[i][j] == color) ? '1' : (board[i][j] == None ? '0' : '2');
 		oppoPattern[2] += (board[i][j] == opp) ? '1' : (board[i][j] == None ? '0' : '2');
 	}
@@ -343,7 +351,7 @@ LL EvaluatePosition(Chess color, int x, int y) {
 	oppoScore -= point_score[1][1][y];
 	oppoScore -= point_score[1][2][x - y + board_size];
 	oppoScore -= point_score[1][3][x + y];
-	
+
 	board[x][y] = None;
 	return myScore - oppoScore;
 }
@@ -416,10 +424,11 @@ LL PatternScore(Chess color, const string& line) {
 	//如果line中无1,则直接返回0
 	if (line.find("1") == string::npos) return 0;
 	LL totalScore = 0;
+	double colorRate = (color == White) ? 0.45 : 1;
 	for (size_t i = 0; i < patterns.size(); i++) {
 		size_t pos = 0;
 		while ((pos = line.find(patterns[i].pattern, pos)) != string::npos) {
-			totalScore += patterns[i].score;
+			totalScore += (LL)(colorRate*patterns[i].score);
 			pos += patterns[i].pattern.size();
 		}
 	}
@@ -433,7 +442,7 @@ void StartGame() {
 	while (1) {
 		// 接收指令
 		int color = 0;
-		scanf("%s %d",cmd,&color);
+		scanf("%s %d", cmd, &color);
 
 		// 检查指令是否为 START
 		if (strcmp(cmd, "START") == 0 && (color == 1 || color == 2)) {
@@ -476,7 +485,7 @@ void StartGame() {
 #if _DEBUG_
 			int w;
 			scanf("%d", &w);
-			if(w == 1){
+			if (w == 1) {
 				printf("DEBUG winner is Black\n");
 			}
 			else {
