@@ -10,9 +10,9 @@
 #include <queue>
 using namespace std;
 
-#define _DEBUG_ 1
+#define _DEBUG_ 0
 #define _ONLINE_DEBUG_ 0
-#define _TIMER_ 1
+#define _TIMER_ 0
 
 //常量与def
 typedef long long LL;
@@ -442,17 +442,22 @@ LL Alpha_Beta(Chess color, LL alpha, LL beta, int depth) {
 	if (score != hashNoneScore && depth != dpth) {
 		return score;
 	}
-
+	LL score_self = Evaluate(color);
+	LL score_oppo = Evaluate((color == Black) ? White : Black);
 	//递归到最后一层,直接返回评估值,以Exact方式存入置换表
 	if (depth == 0) {
-		LL val = Evaluate(color) - Evaluate((color == Black) ? White : Black);
-		RecordHashItem(depth, val, HashItem::EXACT);
-		return val;
+		RecordHashItem(depth, score_self - score_oppo, HashItem::EXACT);
+		return score_self - score_oppo;
 	}
+	//如果己方或对方五连,则直接返回MAX分数,后面的dpth-depth是为了让遍历层数少(depth更大的)结果更优先
+	if(score_self >= FIVE_LINE)
+		return MAX_SCORE - 10 - (dpth - depth);
+	if (score_oppo >= FIVE_LINE)
+		return MIN_SCORE + 10 + (dpth - depth);
 
 	set<Point, PointComparator> Moves = GetPossibleMoves(color);
 	if (Moves.empty()) {
-		return Evaluate(color) - Evaluate((color == Black) ? White : Black);
+		return score_self - score_oppo;
 	}
 	Chess oppo = (color == Black) ? White : Black;
 	int cnt = 0;
