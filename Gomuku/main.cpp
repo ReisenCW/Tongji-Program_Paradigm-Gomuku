@@ -17,7 +17,7 @@ using namespace std;
 //常量与def
 typedef long long LL;
 const int board_size = 12;
-const int dpth = 4;
+const int dpth = 5;
 const int hashIndexSize = 0xffff;//掩码,用于限制位数(二进制对应1111111111111111)
 const int hashNoneScore = 99999999;//置换表中的空值
 
@@ -146,14 +146,14 @@ void UpdateInfo(int x, int y) {
 	UpdateScore(x, y);
 }
 
-set<Point, PointComparator> GetPossibleMoves(Chess color);//获取所有可能的落子位置
+//set<Point, PointComparator> GetPossibleMoves(Chess color);//获取所有可能的落子位置
 
 //position manager
 struct HistoryPosition {
 	HistoryPosition() : chosenPosition({ -1, -1 })
 	{}
 	Point chosenPosition;						//选择的落子点
-	set<Point, PointComparator> addedPositions;	//由于chosenPosition而添加的可能落子点
+	set<Point> addedPositions;	//由于chosenPosition而添加的可能落子点
 };
 
 class PositionManager {
@@ -166,25 +166,27 @@ private:
 		return x >= 0 && x < board_size && y >= 0 && y < board_size;
 	}
 private:
-	set<Point, PointComparator> currentPossiblePos;
+	set<Point> currentPossiblePos;
 	vector<HistoryPosition> history;
-};
+}ppm;
 
 void PositionManager::AddPossiblePos(int x, int y) {
 	HistoryPosition hp;
 	hp.chosenPosition = { x, y };
-	//把棋子(x,y)周围八个方向的点(Empty,且在棋盘范围内)加入到currentPossiblePos和addedPositions中
+	//把棋子(x,y)周围八个方向的点(Empty,且在棋盘范围内)加入到currentPossiblePos和addedPositions中,每个方向加两个点
 	int dir[4][2] = { {1, 0}, {0, 1}, {1, 1}, {1, -1} };
-	for (int i = 0; i < 4; i++) {
-		int dx = dir[i][0], dy = dir[i][1];
-		if (isInBound(x + dx, y + dy) && board[x + dx][y + dy] == None) {
-			currentPossiblePos.insert({ x + dx, y + dy });
-			hp.addedPositions.insert({ x + dx, y + dy });
-		}
-			
-		if (isInBound(x - dx, y - dy) && board[x - dx][y - dy] == None) {
-			currentPossiblePos.insert({ x - dx, y - dy });
-			hp.addedPositions.insert({ x - dx, y - dy });
+	for (int j = 0; j < 2; j++) {
+		for (int i = 0; i < 4; i++) {
+			int dx = dir[i][0]+j, dy = dir[i][1]+j;
+			if (isInBound(x + dx, y + dy) && board[x + dx][y + dy] == None) {
+				currentPossiblePos.insert({ x + dx, y + dy });
+				hp.addedPositions.insert({ x + dx, y + dy });
+			}
+
+			if (isInBound(x - dx, y - dy) && board[x - dx][y - dy] == None) {
+				currentPossiblePos.insert({ x - dx, y - dy });
+				hp.addedPositions.insert({ x - dx, y - dy });
+			}
 		}
 	}
 	//把当前点从currentPossiblePos中删除
@@ -205,7 +207,14 @@ void PositionManager::RecoverLastState() {
 }
 
 set<Point, PointComparator>& PositionManager::GetPossiblePos() {
-	return currentPossiblePos;
+	static set<Point, PointComparator> pp;
+	pp.clear();
+	for (const auto& p : currentPossiblePos) {
+		if (EvaluatePosition(field, p.x, p.y) > 0) {
+			pp.insert(p);
+		}
+	}
+	return pp;
 }
 //置换表
 //zobrist
@@ -495,6 +504,7 @@ Point MakePlay(int depth) {
 	Alpha_Beta(field, MIN_SCORE, MAX_SCORE, depth);
 	board[bestMove.p.x][bestMove.p.y] = field;
 	UpdateInfo(bestMove.p.x, bestMove.p.y);
+	ppm.AddPossiblePos(bestMove.p.x, bestMove.p.y);
 	return bestMove.p;
 }
 
@@ -518,7 +528,8 @@ LL Alpha_Beta(Chess color, LL alpha, LL beta, int depth) {
 	if (score_oppo >= FIVE_LINE)
 		return MIN_SCORE + 10 + (dpth - depth);
 
-	set<Point, PointComparator> Moves = GetPossibleMoves(color);
+	//set<Point, PointComparator> Moves = GetPossibleMoves(color);
+	set<Point, PointComparator> Moves = ppm.GetPossiblePos();
 	if (Moves.empty()) {
 		return score_self - score_oppo;
 	}
@@ -530,6 +541,7 @@ LL Alpha_Beta(Chess color, LL alpha, LL beta, int depth) {
 		board[p.x][p.y] = color;
 		UpdateZobristValue(p.x, p.y, color);
 		UpdateInfo(p.x, p.y);
+		ppm.AddPossiblePos(p.x, p.y);
 
 		//递归,计算模拟位置的分数
 		LL val = -Alpha_Beta(oppo, -beta, -alpha, depth - 1);//以对手视角进行评估
@@ -537,6 +549,7 @@ LL Alpha_Beta(Chess color, LL alpha, LL beta, int depth) {
 		board[p.x][p.y] = None;
 		UpdateZobristValue(p.x, p.y, color);
 		UpdateInfo(p.x, p.y);
+		ppm.RecoverLastState();
 		//alpha-beta剪枝
 		//对手视角,取最小值,如果当前值已经大于beta了,则对手不会选择这个位置,直接返回beta
 		if (val >= beta) {
@@ -708,17 +721,21 @@ void InitGame() {
 	AC_Searcher.BuildFailPointer();
 	//初始化棋盘
 	board[5][6] = Black;
-	UpdateInfo(5, 6);
 	UpdateZobristValue(5, 6, Black);
+	UpdateInfo(5, 6);
+	ppm.AddPossiblePos(5, 6);
 	board[5][5] = White;
 	UpdateZobristValue(5, 5, White);
 	UpdateInfo(5, 5);
+	ppm.AddPossiblePos(5, 5);
 	board[6][5] = Black;
 	UpdateZobristValue(6, 5, Black);
 	UpdateInfo(6, 5);
+	ppm.AddPossiblePos(6, 5);
 	board[6][6] = White;
 	UpdateZobristValue(6, 6, White);
 	UpdateInfo(6, 6);
+	ppm.AddPossiblePos(6, 6);
 }
 
 //主函数
@@ -757,6 +774,7 @@ void StartGame() {
 			board[x][y] = opponent;
 			UpdateZobristValue(x, y, opponent);
 			UpdateInfo(x, y);
+			ppm.AddPossiblePos(x, y);
 		}
 		//判断游戏结束
 		if (strcmp(cmd, "END") == 0) {
