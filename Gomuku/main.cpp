@@ -10,9 +10,9 @@
 #include <queue>
 using namespace std;
 
-#define _DEBUG_ 0
+#define _DEBUG_ 1
 #define _ONLINE_DEBUG_ 0
-#define _TIMER_ 0
+#define _TIMER_ 1
 
 //常量与def
 typedef long long LL;
@@ -68,6 +68,8 @@ struct HashItem {
 	LL score;
 	enum Flag { ALPHA = 0, BETA = 1, EXACT = 2, EMPTY = 3 } flag;
 };
+
+class PositionManager;
 
 //全局变量
 Chess field; // 己方颜色
@@ -140,9 +142,70 @@ struct PointComparator {
 		return EvaluatePosition(field, a.x, a.y) > EvaluatePosition(field, b.x, b.y);
 	}
 };
-set<Point, PointComparator> GetPossibleMoves(Chess color);//获取所有可能的落子位置
 void UpdateInfo(int x, int y) {
 	UpdateScore(x, y);
+}
+
+set<Point, PointComparator> GetPossibleMoves(Chess color);//获取所有可能的落子位置
+
+//position manager
+struct HistoryPosition {
+	HistoryPosition() : chosenPosition({ -1, -1 })
+	{}
+	Point chosenPosition;						//选择的落子点
+	set<Point, PointComparator> addedPositions;	//由于chosenPosition而添加的可能落子点
+};
+
+class PositionManager {
+public:
+	void AddPossiblePos(int x, int y);
+	void RecoverLastState();
+	set<Point, PointComparator>& GetPossiblePos();
+private:
+	bool isInBound(int x, int y) {
+		return x >= 0 && x < board_size && y >= 0 && y < board_size;
+	}
+private:
+	set<Point, PointComparator> currentPossiblePos;
+	vector<HistoryPosition> history;
+};
+
+void PositionManager::AddPossiblePos(int x, int y) {
+	HistoryPosition hp;
+	hp.chosenPosition = { x, y };
+	//把棋子(x,y)周围八个方向的点(Empty,且在棋盘范围内)加入到currentPossiblePos和addedPositions中
+	int dir[4][2] = { {1, 0}, {0, 1}, {1, 1}, {1, -1} };
+	for (int i = 0; i < 4; i++) {
+		int dx = dir[i][0], dy = dir[i][1];
+		if (isInBound(x + dx, y + dy) && board[x + dx][y + dy] == None) {
+			currentPossiblePos.insert({ x + dx, y + dy });
+			hp.addedPositions.insert({ x + dx, y + dy });
+		}
+			
+		if (isInBound(x - dx, y - dy) && board[x - dx][y - dy] == None) {
+			currentPossiblePos.insert({ x - dx, y - dy });
+			hp.addedPositions.insert({ x - dx, y - dy });
+		}
+	}
+	//把当前点从currentPossiblePos中删除
+	currentPossiblePos.erase({ x, y });
+	history.push_back(hp);
+}
+
+void PositionManager::RecoverLastState() {
+	if (history.empty()) return;//不存在历史记录
+	//取出最近一条历史记录
+	HistoryPosition hp = history.back();
+	history.pop_back();
+	//恢复currentPossiblePos(去除added,加上chosen)
+	for (const auto& p : hp.addedPositions) {
+		currentPossiblePos.erase(p);
+	}
+	currentPossiblePos.insert(hp.chosenPosition);
+}
+
+set<Point, PointComparator>& PositionManager::GetPossiblePos() {
+	return currentPossiblePos;
 }
 //置换表
 //zobrist
@@ -179,7 +242,7 @@ void UpdateZobristValue(int x, int y, Chess color) {
 	currentZobristValue ^= boardZobristValue[(int)color - 1][x][y];
 }
 //存储已经计算过的棋局评分。每个条目包含局面的哈希值、评分、深度和评分类型
-HashItem hashItems[hashIndexSize+1];//下标范围0-1111111111111111
+HashItem hashItems[hashIndexSize + 1];//下标范围0-1111111111111111
 
 //记录置换表信息
 void RecordHashItem(int depth, LL score, HashItem::Flag flag) {
@@ -229,7 +292,7 @@ class AC_Auto;
 class TrieNode {
 public:
 	friend class AC_Auto;
-	TrieNode() : fail(-1), next{-1, -1, -1}, length(0), score(0){}
+	TrieNode() : fail(-1), next{ -1, -1, -1 }, length(0), score(0) {}
 private:
 	char data;//节点存储的字符
 	int fail;//失败指针
@@ -251,15 +314,15 @@ private:
 	vector<int> scores;//模式串对应的分数
 }AC_Searcher;
 
-AC_Auto::AC_Auto() 
-	: patterns({ "11111", "011110", "211110", "011112", "11011", "10111", "11101", "0011100", "0011102", 
-	             "2011100", "010110", "011010", "211100", "001112", "210110", "010112", "210011", "110012", "011000", 
-	             "001100", "000110", "010100", "001010", "010010", "211000", "210100", "000112", "001012", "210010", 
-	             "010012","210001", "100012", "010000", "001000", "000100", "000010", "210000", "000012" }), //38
-	  scores({ FIVE_LINE, LIVE_FOUR, BLOCK_FOUR, BLOCK_FOUR, BLOCK_FOUR, BLOCK_FOUR, BLOCK_FOUR, LIVE_THREE, LIVE_THREE, 
-		       LIVE_THREE, LIVE_THREE, LIVE_THREE, BLOCK_THREE, BLOCK_THREE, BLOCK_THREE, BLOCK_THREE, BLOCK_THREE, BLOCK_THREE,
-		       LIVE_TWO, LIVE_TWO, LIVE_TWO, LIVE_TWO, LIVE_TWO, LIVE_TWO, BLOCK_TWO, BLOCK_TWO, BLOCK_TWO, BLOCK_TWO,
-		       BLOCK_TWO, BLOCK_TWO, BLOCK_TWO, BLOCK_TWO, LIVE_ONE, LIVE_ONE, LIVE_ONE, LIVE_ONE, BLOCK_ONE , BLOCK_ONE})
+AC_Auto::AC_Auto()
+	: patterns({ "11111", "011110", "211110", "011112", "11011", "10111", "11101", "0011100", "0011102",
+				 "2011100", "010110", "011010", "211100", "001112", "210110", "010112", "210011", "110012", "011000",
+				 "001100", "000110", "010100", "001010", "010010", "211000", "210100", "000112", "001012", "210010",
+				 "010012","210001", "100012", "010000", "001000", "000100", "000010", "210000", "000012" }), //38
+	scores({ FIVE_LINE, LIVE_FOUR, BLOCK_FOUR, BLOCK_FOUR, BLOCK_FOUR, BLOCK_FOUR, BLOCK_FOUR, LIVE_THREE, LIVE_THREE,
+			 LIVE_THREE, LIVE_THREE, LIVE_THREE, BLOCK_THREE, BLOCK_THREE, BLOCK_THREE, BLOCK_THREE, BLOCK_THREE, BLOCK_THREE,
+			 LIVE_TWO, LIVE_TWO, LIVE_TWO, LIVE_TWO, LIVE_TWO, LIVE_TWO, BLOCK_TWO, BLOCK_TWO, BLOCK_TWO, BLOCK_TWO,
+			 BLOCK_TWO, BLOCK_TWO, BLOCK_TWO, BLOCK_TWO, LIVE_ONE, LIVE_ONE, LIVE_ONE, LIVE_ONE, BLOCK_ONE , BLOCK_ONE })
 {
 	nodes.resize(104);
 }
@@ -450,7 +513,7 @@ LL Alpha_Beta(Chess color, LL alpha, LL beta, int depth) {
 		return score_self - score_oppo;
 	}
 	//如果己方或对方五连,则直接返回MAX分数,后面的dpth-depth是为了让遍历层数少(depth更大的)结果更优先
-	if(score_self >= FIVE_LINE)
+	if (score_self >= FIVE_LINE)
 		return MAX_SCORE - 10 - (dpth - depth);
 	if (score_oppo >= FIVE_LINE)
 		return MIN_SCORE + 10 + (dpth - depth);
