@@ -589,23 +589,23 @@ LL EvaluatePosition(Chess color, int x, int y) {
 	//初始化pattern
 	string myPattern[4];//大小为4,分别存储横,竖,左上-右下,右上-左下的棋子pattern
 	string oppoPattern[4];
-	//如果开头是边界,则模拟边界
-	if (x - 5 < 0) {
-		myPattern[0] += '2';
-		oppoPattern[0] += '2';
-	}
-	if(y - 5 < 0){
-		myPattern[1] += '2';
-		oppoPattern[1] += '2';
-	}
-	if (x - min(5, min(x, y)) < 0) {
-		myPattern[2] += '2';
-		oppoPattern[2] += '2';
-	}
-	if (x + min(5, min(board_size - 1 - x, y)) >= board_size) {
-		myPattern[3] += '2';
-		oppoPattern[3] += '2';
-	}
+	////如果开头是边界,则模拟边界
+	//if (x - 5 < 0) {
+	//	myPattern[0] += '2';
+	//	oppoPattern[0] += '2';
+	//}
+	//if(y - 5 < 0){
+	//	myPattern[1] += '2';
+	//	oppoPattern[1] += '2';
+	//}
+	//if (x - min(5, min(x, y)) < 0) {
+	//	myPattern[2] += '2';
+	//	oppoPattern[2] += '2';
+	//}
+	//if (x + min(5, min(board_size - 1 - x, y)) >= board_size) {
+	//	myPattern[3] += '2';
+	//	oppoPattern[3] += '2';
+	//}
 
 	//横向
 	for (int i = max(0, x - 5); i < min(board_size, x + 6); i++) {
@@ -627,23 +627,23 @@ LL EvaluatePosition(Chess color, int x, int y) {
 		myPattern[3] += (board[i][j] == color) ? '1' : (board[i][j] == None ? '0' : '2');
 		oppoPattern[3] += (board[i][j] == opp) ? '1' : (board[i][j] == None ? '0' : '2');
 	}
-	//如果结尾是边界,则模拟边界
-	if (x + 5 >= board_size) {
-		myPattern[0] += '2';
-		oppoPattern[0] += '2';
-	}
-	if (y + 5 >= board_size) {
-		myPattern[1] += '2';
-		oppoPattern[1] += '2';
-	}
-	if (x + min(5, min(board_size - 1 - x, y)) >= board_size) {
-		myPattern[3] += '2';
-		oppoPattern[3] += '2';
-	}
-	if (x - min(5, min(x, y)) < 0) {
-		myPattern[2] += '2';
-		oppoPattern[2] += '2';
-	}
+	////如果结尾是边界,则模拟边界
+	//if (x + 5 >= board_size) {
+	//	myPattern[0] += '2';
+	//	oppoPattern[0] += '2';
+	//}
+	//if (y + 5 >= board_size) {
+	//	myPattern[1] += '2';
+	//	oppoPattern[1] += '2';
+	//}
+	//if (x + min(5, min(board_size - 1 - x, y)) >= board_size) {
+	//	myPattern[3] += '2';
+	//	oppoPattern[3] += '2';
+	//}
+	//if (x - min(5, min(x, y)) < 0) {
+	//	myPattern[2] += '2';
+	//	oppoPattern[2] += '2';
+	//}
 	LL myScore = 0;
 	LL oppoScore = 0;
 
@@ -693,11 +693,11 @@ void UpdateScore(int x, int y) {
 		oppoPattern[3] += (board[i][j] == opponent) ? '1' : (board[i][j] == None ? '0' : '2');
 	}
 
-	//首尾加上敌方子,模拟边界
-	for (int i = 0; i < 4; i++) {
-		myPattern[i] = "2" + myPattern[i] + "2";
-		oppoPattern[i] = "2" + oppoPattern[i] + "2";
-	}
+	////首尾加上敌方子,模拟边界
+	//for (int i = 0; i < 4; i++) {
+	//	myPattern[i] = "2" + myPattern[i] + "2";
+	//	oppoPattern[i] = "2" + oppoPattern[i] + "2";
+	//}
 
 	LL myScore[4] = { 0 };
 	LL oppoScore[4] = { 0 };
