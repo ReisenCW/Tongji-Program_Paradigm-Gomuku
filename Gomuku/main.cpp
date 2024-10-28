@@ -10,14 +10,14 @@
 #include <queue>
 using namespace std;
 
-#define _DEBUG_ 1
+#define _DEBUG_ 0
 #define _ONLINE_DEBUG_ 0
-#define _TIMER_ 1
+#define _TIMER_ 0
 
 //常量与def
 typedef long long LL;
 const int board_size = 12;
-const int dpth = 5;
+const int dpth = 4;
 const int hashIndexSize = 0xffff;//掩码,用于限制位数(二进制对应1111111111111111)
 const int hashNoneScore = 99999999;//置换表中的空值
 
@@ -146,7 +146,7 @@ void UpdateInfo(int x, int y) {
 	UpdateScore(x, y);
 }
 
-//set<Point, PointComparator> GetPossibleMoves(Chess color);//获取所有可能的落子位置
+set<Point, PointComparator> GetPossibleMoves(Chess color);//获取所有可能的落子位置
 
 //position manager
 struct HistoryPosition {
@@ -175,17 +175,19 @@ void PositionManager::AddPossiblePos(int x, int y) {
 	hp.chosenPosition = { x, y };
 	//把棋子(x,y)周围八个方向的点(Empty,且在棋盘范围内)加入到currentPossiblePos和addedPositions中,每个方向加两个点
 	int dir[4][2] = { {1, 0}, {0, 1}, {1, 1}, {1, -1} };
-	for (int j = 0; j < 2; j++) {
+	for (int j = 1; j < 3; j++) {
 		for (int i = 0; i < 4; i++) {
-			int dx = dir[i][0]+j, dy = dir[i][1]+j;
+			int dx = dir[i][0]*j, dy = dir[i][1]*j;
 			if (isInBound(x + dx, y + dy) && board[x + dx][y + dy] == None) {
-				currentPossiblePos.insert({ x + dx, y + dy });
-				hp.addedPositions.insert({ x + dx, y + dy });
+				auto insertRes = currentPossiblePos.insert({ x + dx, y + dy });
+				if(insertRes.second)
+					hp.addedPositions.insert({ x + dx, y + dy });
 			}
 
 			if (isInBound(x - dx, y - dy) && board[x - dx][y - dy] == None) {
-				currentPossiblePos.insert({ x - dx, y - dy });
-				hp.addedPositions.insert({ x - dx, y - dy });
+				auto insertRes = currentPossiblePos.insert({ x - dx, y - dy });
+				if (insertRes.second)
+					hp.addedPositions.insert({ x - dx, y - dy });
 			}
 		}
 	}
@@ -210,9 +212,8 @@ set<Point, PointComparator>& PositionManager::GetPossiblePos() {
 	static set<Point, PointComparator> pp;
 	pp.clear();
 	for (const auto& p : currentPossiblePos) {
-		if (EvaluatePosition(field, p.x, p.y) > 0) {
+		//if (EvaluatePosition(field, p.x, p.y) > 0)
 			pp.insert(p);
-		}
 	}
 	return pp;
 }
