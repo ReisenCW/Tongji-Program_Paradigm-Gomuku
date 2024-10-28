@@ -17,7 +17,7 @@ using namespace std;
 //常量与def
 typedef long long LL;
 const int board_size = 12;
-const int dpth = 4;
+const int dpth = 5;
 const int hashIndexSize = 0xffff;//掩码,用于限制位数(二进制对应1111111111111111)
 const int hashNoneScore = 99999999;//置换表中的空值
 
@@ -25,13 +25,13 @@ const int hashNoneScore = 99999999;//置换表中的空值
 const int MAX_SCORE = 10000000;
 const int MIN_SCORE = -10000000;
 const int FIVE_LINE = 1000000;     // 五连分数
-const int LIVE_FOUR = 8000;        // 活四(在两个点上下都可以五连)分数
+const int LIVE_FOUR = 12000;        // 活四(在两个点上下都可以五连)分数
 const int BLOCK_FOUR = 2000;       // 冲四(在唯一的一点上下可以五连)分数
 const int LIVE_THREE = 2000;   // 活三(可以变成活4)分数
-const int BLOCK_THREE = 400;       // 眠三(可以变成冲4)分数
-const int LIVE_TWO = 120;          // 活二(可以变成活3)分数
-const int BLOCK_TWO = 40;          // 眠二(可以变成眠三)分数
-const int LIVE_ONE = 20;           // 活一(可以变成活二)分数
+const int BLOCK_THREE = 300;       // 眠三(可以变成冲4)分数
+const int LIVE_TWO = 300;          // 活二(可以变成活3)分数
+const int BLOCK_TWO = 30;          // 眠二(可以变成眠三)分数
+const int LIVE_ONE = 30;           // 活一(可以变成活二)分数
 const int BLOCK_ONE = 1;           // 眠一(可以变成眠二)分数
 
 //枚举类
@@ -175,7 +175,7 @@ void PositionManager::AddPossiblePos(int x, int y) {
 	hp.chosenPosition = { x, y };
 	//把棋子(x,y)周围八个方向的点(Empty,且在棋盘范围内)加入到currentPossiblePos和addedPositions中,每个方向加两个点
 	int dir[4][2] = { {1, 0}, {0, 1}, {1, 1}, {1, -1} };
-	for (int j = 1; j < 3; j++) {
+	for (int j = 1; j < 2; j++) {//change 3 to 2!to test
 		for (int i = 0; i < 4; i++) {
 			int dx = dir[i][0]*j, dy = dir[i][1]*j;
 			if (isInBound(x + dx, y + dy) && board[x + dx][y + dy] == None) {
@@ -609,6 +609,11 @@ LL EvaluatePosition(Chess color, int x, int y) {
 		myPattern[3] += (board[i][j] == color) ? '1' : (board[i][j] == None ? '0' : '2');
 		oppoPattern[3] += (board[i][j] == opp) ? '1' : (board[i][j] == None ? '0' : '2');
 	}
+	//首尾加上敌方子,模拟边界
+	for (int i = 0; i < 4; i++) {
+		myPattern[i] = "2" + myPattern[i] + "2";
+		oppoPattern[i] = "2" + oppoPattern[i] + "2";
+	}
 
 	LL myScore = 0;
 	LL oppoScore = 0;
@@ -657,6 +662,12 @@ void UpdateScore(int x, int y) {
 	for (int i = x + min(board_size - 1 - x, y), j = y - min(board_size - 1 - x, y); i >= 0 && j < board_size; i--, j++) {
 		myPattern[3] += (board[i][j] == field) ? '1' : (board[i][j] == None ? '0' : '2');
 		oppoPattern[3] += (board[i][j] == opponent) ? '1' : (board[i][j] == None ? '0' : '2');
+	}
+
+	//首尾加上敌方子,模拟边界
+	for (int i = 0; i < 4; i++) {
+		myPattern[i] = "2" + myPattern[i] + "2";
+		oppoPattern[i] = "2" + oppoPattern[i] + "2";
 	}
 
 	LL myScore[4] = { 0 };
