@@ -1,12 +1,12 @@
 #define _CRT_SECURE_NO_WARNINGS
 #include "stdio.h"
 #include <set>
+#include <unordered_set>
 #include <iostream>
 #include <climits>
 #include <cstring>
 #include <vector>
 #include <algorithm>
-#include <unordered_map>
 #include <queue>
 using namespace std;
 
@@ -24,11 +24,11 @@ const int hashNoneScore = 99999999;//置换表中的空值
 //分数评估表
 const int MAX_SCORE = 10000000;
 const int MIN_SCORE = -10000000;
-const int FIVE_LINE = 1000000;     // 五连分数
+const int FIVE_LINE = 5000000;     // 五连分数
 const int LIVE_FOUR = 50000;        // 活四(在两个点上下都可以五连)分数
 const int BLOCK_FOUR = 6000;       // 冲四(在唯一的一点上下可以五连)分数
 const int LIVE_THREE = 6000;   // 活三(可以变成活4)分数
-const int BLOCK_THREE = 300;       // 眠三(可以变成冲4)分数
+const int BLOCK_THREE = 200;       // 眠三(可以变成冲4)分数
 const int LIVE_TWO = 200;          // 活二(可以变成活3)分数
 const int BLOCK_TWO = 30;          // 眠二(可以变成眠三)分数
 const int LIVE_ONE = 30;           // 活一(可以变成活二)分数
@@ -45,11 +45,18 @@ struct Point {
 	int x;
 	int y;
 	bool operator==(const Point& p) const {
-		return x == p.x && y == p.y;
+		return (x == p.x) && (y == p.y);
 	}
 	bool operator<(const Point& p) const {
 		return tie(x, y) < tie(p.x, p.y);
 	}
+	struct PointHash {
+		size_t operator()(const Point& p) const {
+			size_t h1 = hash<int>()(p.x);
+			size_t h2 = hash<int>()(p.y);
+			return h1 ^ (h2 * 31);
+		}
+	};
 };
 
 struct Move {
@@ -146,14 +153,12 @@ void UpdateInfo(int x, int y) {
 	UpdateScore(x, y);
 }
 
-set<Point, PointComparator> GetPossibleMoves(Chess color);//获取所有可能的落子位置
-
 //position manager
 struct HistoryPosition {
 	HistoryPosition() : chosenPosition({ -1, -1 })
 	{}
 	Point chosenPosition;						//选择的落子点
-	set<Point> addedPositions;	//由于chosenPosition而添加的可能落子点
+	unordered_set<Point, Point::PointHash> addedPositions;	//由于chosenPosition而添加的可能落子点
 };
 
 class PositionManager {
@@ -166,7 +171,7 @@ private:
 		return x >= 0 && x < board_size && y >= 0 && y < board_size;
 	}
 private:
-	set<Point> currentPossiblePos;
+	unordered_set<Point,Point::PointHash> currentPossiblePos;
 	vector<HistoryPosition> history;
 }ppm;
 
@@ -175,7 +180,7 @@ void PositionManager::AddPossiblePos(int x, int y) {
 	hp.chosenPosition = { x, y };
 	//把棋子(x,y)周围八个方向的点(Empty,且在棋盘范围内)加入到currentPossiblePos和addedPositions中,每个方向加两个点
 	int dir[4][2] = { {1, 0}, {0, 1}, {1, 1}, {1, -1} };
-	for (int j = 1; j < 2; j++) {//change 3 to 2!to test
+	for (int j = 1; j < 2; j++) {
 		for (int i = 0; i < 4; i++) {
 			int dx = dir[i][0] * j, dy = dir[i][1] * j;
 			if (isInBound(x + dx, y + dy) && board[x + dx][y + dy] == None) {
@@ -212,7 +217,6 @@ set<Point, PointComparator>& PositionManager::GetPossiblePos() {
 	static set<Point, PointComparator> pp;
 	pp.clear();
 	for (const auto& p : currentPossiblePos) {
-		//if (EvaluatePosition(field, p.x, p.y) > 0)
 		pp.insert(p);
 	}
 	return pp;
@@ -459,41 +463,6 @@ void PrintBoard() {
 /***********************************************调试函数************************************************/
 //*****************************************************************************************************
 //函数实现
-set<Point, PointComparator> GetPossibleMoves(Chess color) {
-	set<Point, PointComparator> moves;
-	int minX = board_size, maxX = 0, minY = board_size, maxY = 0;
-
-	// 找到当前棋局的最左、最右、最上、最下点
-	for (int i = 0; i < board_size; i++) {
-		for (int j = 0; j < board_size; j++) {
-			if (board[i][j] != None) {
-				if (i < minX) minX = i;
-				if (i > maxX) maxX = i;
-				if (j < minY) minY = j;
-				if (j > maxY) maxY = j;
-			}
-		}
-	}
-
-	// 扩展2格的范围
-	minX = max(0, minX - 2);
-	maxX = min(board_size - 1, maxX + 2);
-	minY = max(0, minY - 2);
-	maxY = min(board_size - 1, maxY + 2);
-
-	// 在扩展后的范围内寻找可能的落子位置
-	for (int i = minX; i <= maxX; i++) {
-		for (int j = minY; j <= maxY; j++) {
-			if (board[i][j] == None) {
-				if (EvaluatePosition(color, i, j) > 0)
-					moves.insert({ i, j });//按照评估分数从大到小排序
-			}
-		}
-	}
-
-	return moves;
-}
-
 
 Point MakePlay(int depth) {
 #if _TIMER_
@@ -529,7 +498,6 @@ LL Alpha_Beta(Chess color, LL alpha, LL beta, int depth) {
 	if (score_oppo >= FIVE_LINE)
 		return MIN_SCORE + 10 + (dpth - depth);
 
-	//set<Point, PointComparator> Moves = GetPossibleMoves(color);
 	set<Point, PointComparator> Moves = ppm.GetPossiblePos();
 	if (Moves.empty()) {
 		return score_self - score_oppo;
@@ -737,21 +705,6 @@ void UpdateScore(int x, int y) {
 		all_score[i] += point_score[i][3][x + y];
 	}
 }
-
-//LL PatternScore(Chess color, const string& line) {
-//	//如果line中无1,则直接返回0
-//	if (line.find("1") == string::npos) return 0;
-//	LL totalScore = 0;
-//	double colorRate = (color == White) ? 0.45 : 1;
-//	for (size_t i = 0; i < patterns.size(); i++) {
-//		size_t pos = 0;
-//		while ((pos = line.find(patterns[i].pattern, pos)) != string::npos) {
-//			totalScore += (LL)(colorRate * patterns[i].score);
-//			pos += patterns[i].pattern.size();
-//		}
-//	}
-//	return totalScore;
-//}
 
 void InitGame() {
 	//初始化Zobrist
