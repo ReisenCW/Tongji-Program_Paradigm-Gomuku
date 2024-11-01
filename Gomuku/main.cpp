@@ -10,14 +10,14 @@
 #include <queue>
 using namespace std;
 
-#define _DEBUG_ 1
+#define _DEBUG_ 0
 #define _ONLINE_DEBUG_ 0
-#define _TIMER_ 1
+#define _TIMER_ 0
 
 //常量与def
 typedef long long LL;
 const int board_size = 12;
-const int dpth = 4;
+const int dpth = 5;
 const int hashIndexSize = 0xffff;//掩码,用于限制位数(二进制对应1111111111111111)
 const int hashNoneScore = 99999999;//置换表中的空值
 
@@ -25,13 +25,13 @@ const int hashNoneScore = 99999999;//置换表中的空值
 const int MAX_SCORE = 10000000;
 const int MIN_SCORE = -10000000;
 const int FIVE_LINE = 5000000;     // 五连分数
-const int LIVE_FOUR = 50000;        // 活四(在两个点上下都可以五连)分数
+const int LIVE_FOUR = 50000;       // 活四(在两个点上下都可以五连)分数
 const int BLOCK_FOUR = 6000;       // 冲四(在唯一的一点上下可以五连)分数
-const int LIVE_THREE = 6000;   // 活三(可以变成活4)分数
-const int BLOCK_THREE = 200;       // 眠三(可以变成冲4)分数
-const int LIVE_TWO = 200;          // 活二(可以变成活3)分数
-const int BLOCK_TWO = 30;          // 眠二(可以变成眠三)分数
-const int LIVE_ONE = 30;           // 活一(可以变成活二)分数
+const int LIVE_THREE = 6000;	   // 活三(可以变成活4)分数
+const int BLOCK_THREE = 300;       // 眠三(可以变成冲4)分数
+const int LIVE_TWO = 300;          // 活二(可以变成活3)分数
+const int BLOCK_TWO = 10;          // 眠二(可以变成眠三)分数
+const int LIVE_ONE = 10;           // 活一(可以变成活二)分数
 const int BLOCK_ONE = 1;           // 眠一(可以变成眠二)分数
 
 //枚举类
@@ -50,18 +50,22 @@ struct Point {
 	bool operator<(const Point& p) const {
 		return tie(x, y) < tie(p.x, p.y);
 	}
-	struct PointHash {
-		size_t operator()(const Point& p) const {
-			size_t h1 = hash<int>()(p.x);
-			size_t h2 = hash<int>()(p.y);
-			return h1 ^ (h2 * 31);
-		}
-	};
 };
 
 struct Move {
 	Point p;
 	LL score;
+	bool operator <(const Move& pos) const {
+		if (score != pos.score) {
+			return score > pos.score;
+		}
+		if (p.x != pos.p.x) {
+			return p.x < pos.p.x;
+		}
+		else {
+			return p.y < pos.p.y;
+		}
+	}
 };
 
 struct Pattern {
@@ -105,11 +109,11 @@ Point MakePlay(int depth);//己方下棋
 void StartGame();//游戏主循环
 
 //其它函数
-struct PointComparator {
-	bool operator()(const Point& a, const Point& b) const {
-		return EvaluatePosition(field, a.x, a.y) > EvaluatePosition(field, b.x, b.y);
-	}
-};
+//struct PointComparator {
+//	bool operator()(const Point& a, const Point& b) const {
+//		return EvaluatePosition(field, a.x, a.y) > EvaluatePosition(field, b.x, b.y);
+//	}
+//};
 void UpdateInfo(int x, int y) {
 	UpdateScore(x, y);
 }
@@ -126,7 +130,7 @@ class PositionManager {
 public:
 	void AddPossiblePos(int x, int y);
 	void RecoverLastState();
-	set<Point, PointComparator>& GetPossiblePos();
+	const set<Point>& GetPossiblePos();
 private:
 	bool isInBound(int x, int y) {
 		return x >= 0 && x < board_size && y >= 0 && y < board_size;
@@ -174,13 +178,8 @@ void PositionManager::RecoverLastState() {
 	currentPossiblePos.insert(hp.chosenPosition);
 }
 
-set<Point, PointComparator>& PositionManager::GetPossiblePos() {
-	static set<Point, PointComparator> pp;
-	pp.clear();
-	for (const auto& p : currentPossiblePos) {
-		pp.insert(p);
-	}
-	return pp;
+const set<Point>& PositionManager::GetPossiblePos() {
+	return currentPossiblePos;
 }
 //置换表
 //zobrist
@@ -464,27 +463,34 @@ LL Alpha_Beta(Chess color, LL alpha, LL beta, int depth) {
 		return MIN_SCORE + 10 + (dpth - depth);
 	Chess oppo = (color == Black) ? White : Black;
 
-	set<Point, PointComparator> Moves = ppm.GetPossiblePos();
+	set<Move> Moves;
+	set<Point> tempMoves = ppm.GetPossiblePos();
+	auto it = tempMoves.begin();
+	while (it != tempMoves.end()) {
+		Moves.insert({ {it->x, it->y}, EvaluatePosition(color, it->x, it->y) });
+		it++;
+	}
+
 	if (Moves.empty()) {
 		return score_self - score_oppo;
 	}
 
 	int cnt = 0;
 	for (const auto& p : Moves) {
-		if (cnt > 10) break;
+		if (cnt > 13) break;
 		//模拟落子
-		board[p.x][p.y] = color;
-		UpdateZobristValue(p.x, p.y, color);
-		UpdateInfo(p.x, p.y);
+		board[p.p.x][p.p.y] = color;
+		UpdateZobristValue(p.p.x, p.p.y, color);
+		UpdateInfo(p.p.x, p.p.y);
 
-		ppm.AddPossiblePos(p.x, p.y);
+		ppm.AddPossiblePos(p.p.x, p.p.y);
 
 		//递归,计算模拟位置的分数
 		LL val = -Alpha_Beta(oppo, -beta, -alpha, depth - 1);//以对手视角进行评估
 		//还原棋盘
-		board[p.x][p.y] = None;
-		UpdateZobristValue(p.x, p.y, color);
-		UpdateInfo(p.x, p.y);
+		board[p.p.x][p.p.y] = None;
+		UpdateZobristValue(p.p.x, p.p.y, color);
+		UpdateInfo(p.p.x, p.p.y);
 		ppm.RecoverLastState();
 		//alpha-beta剪枝
 		//对手视角,取最小值,如果当前值已经大于beta了,则对手不会选择这个位置,直接返回beta
@@ -497,7 +503,7 @@ LL Alpha_Beta(Chess color, LL alpha, LL beta, int depth) {
 			flag = HashItem::EXACT;
 			alpha = val;
 			if (depth == dpth) {
-				bestMove = { p, alpha };
+				bestMove = { {p.p.x, p.p.y}, alpha };
 			}
 		}
 		cnt++;
