@@ -10,14 +10,14 @@
 #include <queue>
 using namespace std;
 
-#define _DEBUG_ 0
+#define _DEBUG_ 1
 #define _ONLINE_DEBUG_ 0
 #define _TIMER_ 1
 
 //常量与def
 typedef long long LL;
 const int board_size = 12;
-const int dpth = 5;
+const int dpth = 4;
 const int hashIndexSize = 0xffff;//掩码,用于限制位数(二进制对应1111111111111111)
 const int hashNoneScore = 99999999;//置换表中的空值
 
@@ -85,50 +85,11 @@ Chess board[board_size][board_size] = { None }; // 棋盘
 LL all_score[2]; // 总分数,all_score[0]为己方分数,all_score[1]为对方分数
 LL point_score[2][4][board_size * 2];//[chess][direction][index],对于竖和横,会空出来board_size个位置
 Move bestMove = { {-1, -1} , MIN_SCORE };
+bool hasLiveFour[2] = { 0 };
+bool hasLiveThreeOrBlockFour[2] = { 0 };
 //zobrist
 LL boardZobristValue[2][board_size][board_size];//棋盘每个位置的Zobrist值,用于计算当前局面的Zobrist值
 LL currentZobristValue;//每一个局面对应一个Zobrist值,currentZobristValue为当前局面的Zobrist值
-
-//vector<Pattern> patterns = {
-//	{ "11111" ,  FIVE_LINE   }, // 连五
-//	{ "011110",  LIVE_FOUR   }, // 活四
-//	{ "211110",  BLOCK_FOUR  }, // 冲四
-//	{ "011112",  BLOCK_FOUR  },
-//	{ "11011" ,  BLOCK_FOUR  },
-//	{ "10111" ,  BLOCK_FOUR  },
-//	{ "11101" ,  BLOCK_FOUR  },
-//	{ "0011100", LIVE_THREE }, // 活三
-//	{ "0011102", LIVE_THREE },
-//	{ "2011100", LIVE_THREE },
-//	{ "010110",  LIVE_THREE  },
-//	{ "011010",  LIVE_THREE  },
-//	{ "211100",  BLOCK_THREE }, // 眠三
-//	{ "001112",  BLOCK_THREE },
-//	{ "210110",  BLOCK_THREE },
-//	{ "010112",  BLOCK_THREE },
-//	{ "210011",  BLOCK_THREE },
-//	{ "110012",  BLOCK_THREE },
-//	{ "011000",  LIVE_TWO    }, // 活二
-//	{ "001100",  LIVE_TWO    },
-//	{ "000110",  LIVE_TWO    },
-//	{ "010100",  LIVE_TWO    },
-//	{ "001010",  LIVE_TWO    },
-//	{ "010010",  LIVE_TWO    },
-//	{ "211000",  BLOCK_TWO   }, // 眠二
-//	{ "210100",  BLOCK_TWO   },
-//	{ "000112",  BLOCK_TWO   },
-//	{ "001012",  BLOCK_TWO   },
-//	{ "210010",  BLOCK_TWO   },
-//	{ "010012",  BLOCK_TWO   },
-//	{ "210001",  BLOCK_TWO   },
-//	{ "100012",  BLOCK_TWO   },
-//	{ "010000",  LIVE_ONE    }, // 活一
-//	{ "001000",  LIVE_ONE    },
-//	{ "000100",  LIVE_ONE    },
-//	{ "000010",  LIVE_ONE    },
-//	{ "210000",  BLOCK_ONE   }, // 眠一
-//	{ "000012",  BLOCK_ONE   }
-//};
 
 //评估函数
 LL Evaluate(Chess color);//总评估函数(评估整个棋盘)
@@ -158,7 +119,7 @@ struct HistoryPosition {
 	HistoryPosition() : chosenPosition({ -1, -1 })
 	{}
 	Point chosenPosition;						//选择的落子点
-	unordered_set<Point, Point::PointHash> addedPositions;	//由于chosenPosition而添加的可能落子点
+	set<Point> addedPositions;	//由于chosenPosition而添加的可能落子点
 };
 
 class PositionManager {
@@ -171,7 +132,7 @@ private:
 		return x >= 0 && x < board_size && y >= 0 && y < board_size;
 	}
 private:
-	unordered_set<Point,Point::PointHash> currentPossiblePos;
+	set<Point> currentPossiblePos;
 	vector<HistoryPosition> history;
 }ppm;
 
@@ -329,14 +290,18 @@ private:
 }AC_Searcher;
 
 AC_Auto::AC_Auto()
-	: patterns({ "11111", "011110", "211110", "011112", "11011", "10111", "11101", "0011100", "0011102",
-				 "2011100", "010110", "011010", "211100", "001112", "210110", "010112", "210011", "110012", "011000",
-				 "001100", "000110", "010100", "001010", "010010", "211000", "210100", "000112", "001012", "210010",
-				 "010012","210001", "100012", "010000", "001000", "000100", "000010", "210000", "000012" }), //38
-	scores({ FIVE_LINE, LIVE_FOUR, BLOCK_FOUR, BLOCK_FOUR, BLOCK_FOUR, BLOCK_FOUR, BLOCK_FOUR, LIVE_THREE, LIVE_THREE,
-			 LIVE_THREE, LIVE_THREE, LIVE_THREE, BLOCK_THREE, BLOCK_THREE, BLOCK_THREE, BLOCK_THREE, BLOCK_THREE, BLOCK_THREE,
-			 LIVE_TWO, LIVE_TWO, LIVE_TWO, LIVE_TWO, LIVE_TWO, LIVE_TWO, BLOCK_TWO, BLOCK_TWO, BLOCK_TWO, BLOCK_TWO,
-			 BLOCK_TWO, BLOCK_TWO, BLOCK_TWO, BLOCK_TWO, LIVE_ONE, LIVE_ONE, LIVE_ONE, LIVE_ONE, BLOCK_ONE , BLOCK_ONE })
+	: patterns({ "11111", "011110", "211110", "011112", "11011", "10111", "11101", //7
+				 "0011100", "0011102","2011100", "010110", "011010", //5
+				 "211100", "001112", "210110", "010112", "211010", "010112", //6
+				 "001100", "0001102", "2011000", "010100", "001010", "010010", //6
+				 "211000", "210100", "000112", "001012",//4
+				 "010000", "001000", "000100", "000010", "210000", "000012" }), //6
+	scores({ FIVE_LINE, LIVE_FOUR, BLOCK_FOUR, BLOCK_FOUR, BLOCK_FOUR, BLOCK_FOUR, BLOCK_FOUR,
+			 LIVE_THREE, LIVE_THREE,LIVE_THREE, LIVE_THREE, LIVE_THREE,
+			 BLOCK_THREE, BLOCK_THREE, BLOCK_THREE, BLOCK_THREE, BLOCK_THREE, BLOCK_THREE,
+			 LIVE_TWO, LIVE_TWO, LIVE_TWO, LIVE_TWO, LIVE_TWO, LIVE_TWO,
+			 BLOCK_TWO, BLOCK_TWO,  BLOCK_TWO,  BLOCK_TWO,
+			 LIVE_ONE, LIVE_ONE, LIVE_ONE, LIVE_ONE, BLOCK_ONE , BLOCK_ONE })
 {
 	nodes.resize(104);
 }
@@ -497,12 +462,13 @@ LL Alpha_Beta(Chess color, LL alpha, LL beta, int depth) {
 		return MAX_SCORE - 10 - (dpth - depth);
 	if (score_oppo >= FIVE_LINE)
 		return MIN_SCORE + 10 + (dpth - depth);
+	Chess oppo = (color == Black) ? White : Black;
 
 	set<Point, PointComparator> Moves = ppm.GetPossiblePos();
 	if (Moves.empty()) {
 		return score_self - score_oppo;
 	}
-	Chess oppo = (color == Black) ? White : Black;
+
 	int cnt = 0;
 	for (const auto& p : Moves) {
 		if (cnt > 10) break;
@@ -510,6 +476,7 @@ LL Alpha_Beta(Chess color, LL alpha, LL beta, int depth) {
 		board[p.x][p.y] = color;
 		UpdateZobristValue(p.x, p.y, color);
 		UpdateInfo(p.x, p.y);
+
 		ppm.AddPossiblePos(p.x, p.y);
 
 		//递归,计算模拟位置的分数
@@ -638,6 +605,10 @@ LL EvaluatePosition(Chess color, int x, int y) {
 
 
 void UpdateScore(int x, int y) {
+	hasLiveFour[0] = false;
+	hasLiveFour[1] = false;
+	hasLiveThreeOrBlockFour[0] = false;
+	hasLiveThreeOrBlockFour[1] = false;
 	string myPattern[4];//大小为4,分别存储横,竖,左上-右下,右上-左下的棋子pattern
 	string oppoPattern[4];
 	//横向
