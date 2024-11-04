@@ -449,8 +449,9 @@ LL Alpha_Beta(Chess color, LL alpha, LL beta, int depth) {
 	if (score != hashNoneScore && depth != dpth) {
 		return score;
 	}
+	Chess oppo = (color == Black) ? White : Black;
 	LL score_self = Evaluate(color);
-	LL score_oppo = Evaluate((color == Black) ? White : Black);
+	LL score_oppo = Evaluate(oppo);
 	//递归到最后一层,直接返回评估值,以Exact方式存入置换表
 	if (depth == 0) {
 		RecordHashItem(depth, score_self - score_oppo, HashItem::EXACT);
@@ -461,13 +462,12 @@ LL Alpha_Beta(Chess color, LL alpha, LL beta, int depth) {
 		return MAX_SCORE - 10 - (dpth - depth);
 	if (score_oppo >= FIVE_LINE)
 		return MIN_SCORE + 10 + (dpth - depth);
-	Chess oppo = (color == Black) ? White : Black;
 
 	set<Move> Moves;
 	set<Point> tempMoves = ppm.GetPossiblePos();
 	auto it = tempMoves.begin();
 	while (it != tempMoves.end()) {
-		Moves.insert({ {it->x, it->y}, EvaluatePosition(color, it->x, it->y) });
+		Moves.insert({ {it->x, it->y}, EvaluatePosition(field, it->x, it->y) });
 		it++;
 	}
 
